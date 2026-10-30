@@ -83,6 +83,17 @@ Settings → Shell → **Uninstall…** → *Remove PATH block and wrappers*. Ne
 login stored in `~/.claude` (`configDirectory` = `~/.claude`). `~/.zshrc` no longer contains the aiswitch
 block; a backup exists in `~/.aiswitch/backups/`. Re-install from Settings and confirm switching works again.
 
+### Step 14 – Continue a conversation under another account
+1. With `Claude A` active, run `claude` in a project folder, ask something memorable, exit.
+2. Dashboard → card `Claude A` → ⋯ → *Sessions…*. The conversation is listed with your prompt as title.
+3. ⋯ on the row → *Duplicate to Claude B…* → the alert offers *Resume in Claude B*. Click it.
+   Expected: a Terminal opens in the same project folder, runs `claude --resume <id>` under B
+   (`claude auth status` in that window shows B), and the earlier conversation is visible.
+4. `aiswitch sessions claude` lists the session for both accounts; the two files are independent copies.
+5. Codex: same flow with `codex`. Record whether `codex resume <id>` finds the copied rollout; if it does not
+   (newer Codex versions index threads in a database), note it in TROUBLESHOOTING and use `codex resume`
+   (picker) or `--last` in the target profile.
+
 ### Extra checks
 * With `ANTHROPIC_API_KEY` exported, `claude` prints the wrapper warning naming the variable, and
   Diagnostics lists it as an override. `claude auth status` reports `authMethod: api_key`; the card shows the

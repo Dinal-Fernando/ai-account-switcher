@@ -395,6 +395,34 @@ final class AppModel {
 
     func history(_ account: Account) -> [UsageCache.HistoryPoint] { runtime.cache.history(account.key) }
 
+    // MARK: sessions
+
+    func sessions(_ account: Account) async -> [CLISession] {
+        let runtime = runtime
+        return await Task.detached { runtime.sessions(for: account) }.value
+    }
+
+    func findSession(id: String, provider: Provider) async -> CLISession? {
+        let runtime = runtime
+        return await Task.detached { runtime.findSession(id: id, provider: provider) }.value
+    }
+
+    /// Copies one transcript into `target`'s profile (overwrites an identical id there). Returns the copy.
+    func duplicateSession(_ session: CLISession, to target: Account) async -> CLISession? {
+        do {
+            let copy = try runtime.duplicate(session, to: target, overwrite: true)
+            infoMessage = "Copied session \(session.id.prefix(8))… into '\(target.name)'. Resume it from that account's Sessions list or the prompt that just appeared."
+            return copy
+        } catch {
+            errorMessage = "Could not copy the session: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    func resumeSession(_ session: CLISession, in account: Account) {
+        do { try runtime.resume(session, in: account) } catch { errorMessage = "Could not open Terminal: \(error.localizedDescription)" }
+    }
+
     func completeOnboarding() {
         settings.onboardingCompleted = true
         showOnboarding = false

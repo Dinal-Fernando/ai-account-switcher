@@ -10,6 +10,7 @@ import SwitcherCore
     @State private var newShortLabel = ""
     @State private var confirmRemove = false
     @State private var showHistory = false
+    @State private var showSessions = false
 
     private var state: AccountUsageState { model.usageState(account) }
     private var snapshot: UsageSnapshot? { state.effectiveSnapshot }
@@ -87,6 +88,11 @@ import SwitcherCore
     }
 
     private var identityRow: some View {
+        identityContent
+            .sheet(isPresented: $showSessions) { SessionsSheet(account: account).environment(model) }
+    }
+
+    private var identityContent: some View {
         HStack(spacing: 8) {
             if let auth = account.lastAuth {
                 Image(systemName: auth.isAuthenticated ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
@@ -202,6 +208,7 @@ import SwitcherCore
                     Button("Re-authenticate…") { model.startLogin(account) }
                     if account.provider == .codex { Button("Sign in with device code…") { model.startLogin(account, deviceAuth: true) } }
                     Divider()
+                    Button("Sessions…") { showSessions = true }
                     Button("Rename…") { newName = account.name; newShortLabel = account.shortLabel ?? ""; showRename = true }
                     Button(showHistory ? "Hide history" : "Show history") { showHistory.toggle() }
                 }

@@ -71,6 +71,29 @@ public final class SwitcherRuntime: @unchecked Sendable {
         return auth
     }
 
+    // MARK: sessions (duplicate a conversation into another account and resume it there)
+
+    public func sessions(for account: Account, limit: Int = 100) -> [CLISession] {
+        SessionCatalog.list(provider: account.provider, configDir: profiles.configDirectory(for: account), accountId: account.id, limit: limit)
+    }
+
+    public func findSession(id: String, provider: Provider) -> CLISession? {
+        let dirs = accounts.accounts(for: provider).map { ($0.id, profiles.configDirectory(for: $0)) }
+        return SessionCatalog.find(id: id, provider: provider, in: dirs)
+    }
+
+    @discardableResult
+    public func duplicate(_ session: CLISession, to target: Account, overwrite: Bool = false) throws -> CLISession {
+        guard target.provider == session.provider else { throw SessionError.notFound(session.id) }
+        return try SessionCopier.duplicate(session, into: profiles.configDirectory(for: target), targetAccountId: target.id, overwrite: overwrite)
+    }
+
+    /// Opens a Terminal bound to `account` that resumes the session (the transcript must already be in that profile).
+    public func resume(_ session: CLISession, in account: Account) throws {
+        guard let exe = adapter(account.provider).executablePath() else { throw ProcessRunnerError.executableNotFound(account.provider.executableName) }
+        try terminal.openResume(session: session, account: account, executable: exe, shellPath: loginEnvironment["SHELL"])
+    }
+
     /// Re-checks a profile with the vendor CLI and stores identity + status.
     @discardableResult
     public func verify(_ account: Account) async -> AuthStatus {

@@ -19,6 +19,11 @@ struct AISwitchCLI {
                                               run the vendor's browser login inside that profile, here in this terminal
       aiswitch auth [claude|codex] [name|id]  re-check sign-in state with the vendor CLI
       aiswitch usage [claude|codex]           fetch quota for all (or one provider's) accounts
+      aiswitch sessions <claude|codex> [name|id]   stored conversations (id, age, size, folder, title)
+      aiswitch copy-session <claude|codex> <from> <to> <session-id> [--overwrite]
+                                              copy one transcript into another account's profile
+      aiswitch resume <claude|codex> <name|id> <session-id>
+                                              resume a conversation under that account, here in this terminal
       aiswitch rename <claude|codex> <name|id> <new name>
       aiswitch remove <claude|codex> <name|id> [--delete-dir]
       aiswitch doctor [--quick]               diagnostics (quick = no shell/auth probing)
@@ -37,7 +42,7 @@ struct AISwitchCLI {
         let flags = Set(args.filter { $0.hasPrefix("--") })
         let positional = args.filter { !$0.hasPrefix("--") }
         let quick = flags.contains("--quick")
-        let needsShell = !["version", "list", "use", "which", "add", "rename", "remove", "install-shell", "uninstall-shell"].contains(command) && !quick
+        let needsShell = !["version", "list", "use", "which", "add", "rename", "remove", "install-shell", "uninstall-shell", "sessions", "copy-session"].contains(command) && !quick
         let runtime = SwitcherRuntime(captureLoginShell: needsShell)
         do {
             switch command {
@@ -51,6 +56,9 @@ struct AISwitchCLI {
             case "login": try await login(runtime, positional, device: flags.contains("--device"))
             case "auth": try await auth(runtime, positional)
             case "usage": try await usageCommand(runtime, positional)
+            case "sessions": try sessionsCommand(runtime, positional)
+            case "copy-session": try copySession(runtime, positional, overwrite: flags.contains("--overwrite"))
+            case "resume": try resumeCommand(runtime, positional)
             case "rename": try rename(runtime, positional)
             case "remove": try remove(runtime, positional, deleteDir: flags.contains("--delete-dir"))
             case "doctor": await doctor(runtime, quick: quick)
@@ -224,6 +232,61 @@ struct AISwitchCLI {
                 if let e = snap.extraUsage, e.enabled { print("          extra usage: \(e.usedCredits.map { String(format: "%.2f", $0) } ?? "?") / \(e.monthlyLimit.map { String(format: "%.2f", $0) } ?? "?") \(e.currency ?? "")") }
             }
         }
+    }
+
+    static func sessionsCommand(_ runtime: SwitcherRuntime, _ positional: [String]) throws {
+        let p = try provider(positional)
+        let targets = positional.count > 1 ? [try account(runtime, positional)] : runtime.accounts.accounts(for: p)
+        let f = DateFormatter(); f.dateStyle = .short; f.timeStyle = .short
+        for a in targets {
+            let list = runtime.sessions(for: a)
+            print("\(a.name) (\(runtime.profiles.configDirectory(for: a).path)): \(list.count) session(s)")
+            for s in list {
+                let size = ByteCountFormatter.string(fromByteCount: Int64(s.sizeBytes), countStyle: .file)
+                print("  \(s.id)  \(f.string(from: s.modifiedAt))  \(String(s.messageCount).padding(toLength: 4, withPad: " ", startingAt: 0)) msgs  \(size.padding(toLength: 8, withPad: " ", startingAt: 0))  \(s.folderName)")
+                print("      \(s.title)")
+            }
+        }
+    }
+
+    static func copySession(_ runtime: SwitcherRuntime, _ positional: [String], overwrite: Bool) throws {
+        guard positional.count >= 4 else { throw CLIError("usage: aiswitch copy-session <claude|codex> <from> <to> <session-id>") }
+        let p = try provider(positional)
+        guard let from = runtime.accounts.find(provider: p, nameOrId: positional[1]) else { throw CLIError("no \(p.shortName) account '\(positional[1])'") }
+        guard let to = runtime.accounts.find(provider: p, nameOrId: positional[2]) else { throw CLIError("no \(p.shortName) account '\(positional[2])'") }
+        let id = positional[3]
+        guard let session = runtime.sessions(for: from, limit: 10_000).first(where: { $0.id.lowercased() == id.lowercased() }) else {
+            throw CLIError("session \(id) not found in '\(from.name)' (see `aiswitch sessions \(p.rawValue)`)")
+        }
+        let copy = try runtime.duplicate(session, to: to, overwrite: overwrite)
+        print("copied to \(copy.fileURL.path)")
+        print("resume with: aiswitch resume \(p.rawValue) \(ShellQuote.single(to.name)) \(session.id)")
+    }
+
+    static func resumeCommand(_ runtime: SwitcherRuntime, _ positional: [String]) throws {
+        guard positional.count >= 3 else { throw CLIError("usage: aiswitch resume <claude|codex> <account> <session-id>") }
+        let a = try account(runtime, positional)
+        let id = positional[2]
+        guard let session = runtime.sessions(for: a, limit: 10_000).first(where: { $0.id.lowercased() == id.lowercased() }) else {
+            if let elsewhere = runtime.findSession(id: id, provider: a.provider) {
+                throw CLIError("session \(id) belongs to account '\(elsewhere.accountId)'. Copy it first: aiswitch copy-session \(a.provider.rawValue) \(ShellQuote.single(elsewhere.accountId)) \(ShellQuote.single(a.name)) \(id)")
+            }
+            throw CLIError("session \(id) not found in any \(a.provider.displayName) profile")
+        }
+        guard let exe = runtime.adapter(a.provider).executablePath() else { throw CLIError("\(a.provider.executableName) executable not found") }
+        var env = runtime.context.cliEnvironment(for: a)
+        env["TERM"] = ProcessInfo.processInfo.environment["TERM"] ?? "xterm-256color"
+        env[a.provider.profileOverrideEnvVar] = a.id
+        let cwd = FileManager.default.fileExists(atPath: session.cwd) ? session.cwd : FileManager.default.homeDirectoryForCurrentUser.path
+        print("Resuming \(session.id) under '\(a.name)' in \(cwd)")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: exe)
+        process.arguments = session.resumeArguments
+        process.environment = env
+        process.currentDirectoryURL = URL(fileURLWithPath: cwd)
+        try process.run()
+        process.waitUntilExit()
+        exit(process.terminationStatus)
     }
 
     static func rename(_ runtime: SwitcherRuntime, _ positional: [String]) throws {

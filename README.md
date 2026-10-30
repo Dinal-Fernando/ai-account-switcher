@@ -70,6 +70,11 @@ name expected for each profile so you can check Keychain Access yourself.
   menu; threshold alerts carry a **Switch account** action that changes the CLI selection.
 * Phase 4 – Opt-in automatic switching when the active account is exhausted; Claude status-line *beacon*
   (supported data source: values Claude Code itself reports) as a complement to the undocumented endpoints.
+* **Continue a conversation under another account**: each card's *Sessions…* lists that account's stored
+  conversations (local transcript files, readable even when the quota is exhausted). *Duplicate to <account>*
+  copies the one transcript into the other profile and opens a Terminal there running `claude --resume <id>`
+  (`codex resume <id>`), so the same context continues on the other login. Nothing is shared permanently.
+  CLI: `aiswitch sessions`, `aiswitch copy-session`, `aiswitch resume`.
 
 ## Quick start
 

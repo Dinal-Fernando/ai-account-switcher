@@ -66,6 +66,15 @@ Settings → General → Menu bar: switch to *Compact* (`WK12 PER41 CX8`), turn 
 *Active accounts only*. Short labels are edited per account with Rename… (up to 4 characters). The label is
 rendered as an image so its threshold colors survive both light and dark menu bars.
 
+## Resume says the session was not found
+* Claude Code looks for `<id>.jsonl` under `projects/<folder-for-the-current-directory>/`. The app resumes in
+  the conversation's original folder for that reason; if you moved or renamed the project, run
+  `claude --resume <id>` from the old path or copy the transcript folder by hand.
+* The duplicate only exists in the target profile after *Duplicate to…* (or `aiswitch copy-session`).
+  `aiswitch sessions <provider>` shows which accounts hold which ids.
+* Codex: newer versions keep a thread index next to the rollout files; a copied rollout may not appear in the
+  picker. Try `codex resume <id>` directly, then `codex resume --last` in the target profile.
+
 ## Logs
 `~/.aiswitch/logs/aiswitch.log` (secrets redacted). The wrapper prints its resolution with
 `AISWITCH_DEBUG=1 claude --version`.
