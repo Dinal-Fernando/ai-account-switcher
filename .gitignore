@@ -1,0 +1,9 @@
+.build/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+*.swp
+.DS_Store
+Xcode/AIAccountSwitcher.xcodeproj/project.xcworkspace/
