@@ -1,6 +1,18 @@
 import Foundation
 import SwitcherCore
 
+enum MenuBarMode: String, Codable, CaseIterable {
+    case allAccounts
+    case activeOnly
+    var displayName: String { self == .allAccounts ? "All accounts" : "Active accounts only" }
+}
+
+enum MenuBarWindow: String, Codable, CaseIterable {
+    case weekly
+    case fiveHour
+    var displayName: String { self == .weekly ? "Weekly usage" : "5-hour usage" }
+}
+
 enum GraphStyle: String, Codable, CaseIterable {
     case rings
     case pace
@@ -22,6 +34,10 @@ struct AppSettings: Codable, Equatable {
     var onboardingCompleted = false
     var firedNotifications: [String: Double] = [:]
     var menuBarShowsPercent = true
+    var menuBarMode: MenuBarMode = .allAccounts
+    var menuBarWindow: MenuBarWindow = .weekly
+    var menuBarCompact = false
+    var menuBarShowRings = true
 
     static let defaultsKey = "dev.aiswitch.settings.v1"
 
@@ -29,7 +45,8 @@ struct AppSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case refresh, thresholds, notificationsEnabled, autoSwitch, autoSwitchThreshold, terminalApp, showDockIcon,
-             graphStyle, showRemaining, onboardingCompleted, firedNotifications, menuBarShowsPercent
+             graphStyle, showRemaining, onboardingCompleted, firedNotifications, menuBarShowsPercent,
+             menuBarMode, menuBarWindow, menuBarCompact, menuBarShowRings
     }
 
     /// Every key is optional so adding fields later never resets existing preferences.
@@ -47,6 +64,10 @@ struct AppSettings: Codable, Equatable {
         onboardingCompleted = try c.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
         firedNotifications = try c.decodeIfPresent([String: Double].self, forKey: .firedNotifications) ?? [:]
         menuBarShowsPercent = try c.decodeIfPresent(Bool.self, forKey: .menuBarShowsPercent) ?? true
+        menuBarMode = try c.decodeIfPresent(MenuBarMode.self, forKey: .menuBarMode) ?? .allAccounts
+        menuBarWindow = try c.decodeIfPresent(MenuBarWindow.self, forKey: .menuBarWindow) ?? .weekly
+        menuBarCompact = try c.decodeIfPresent(Bool.self, forKey: .menuBarCompact) ?? false
+        menuBarShowRings = try c.decodeIfPresent(Bool.self, forKey: .menuBarShowRings) ?? true
     }
 
     static func load(defaults: UserDefaults = .standard) -> AppSettings {

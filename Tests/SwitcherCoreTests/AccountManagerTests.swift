@@ -47,6 +47,27 @@ final class AccountManagerTests: XCTestCase {
         XCTAssertEqual(list.count, 3)
     }
 
+    func testShortLabelsDefaultToInitialsAndRoundTrip() throws {
+        XCTAssertEqual(Account(id: "a", provider: .claude, name: "Claude Work", kind: .managed).displayShortLabel, "CW")
+        XCTAssertEqual(Account(id: "a", provider: .claude, name: "Personal", kind: .managed).displayShortLabel, "PER")
+        XCTAssertEqual(Account(id: "a", provider: .codex, name: "my work account 2", kind: .managed).displayShortLabel, "MWA")
+        XCTAssertEqual(Account.makeDefault(provider: .claude).displayShortLabel, "CL")
+        XCTAssertEqual(Account.makeDefault(provider: .codex).displayShortLabel, "CX")
+        var renamedDefault = Account.makeDefault(provider: .claude)
+        renamedDefault.name = "Personal"
+        XCTAssertEqual(renamedDefault.displayShortLabel, "PER")
+        XCTAssertEqual(Account(id: "a", provider: .claude, name: "X", kind: .managed, shortLabel: " wk ").displayShortLabel, "WK")
+        XCTAssertEqual(Account(id: "a", provider: .claude, name: "X", kind: .managed, shortLabel: "toolong").displayShortLabel, "TOOL")
+        XCTAssertEqual(Account.initials(of: "", provider: .codex), "CX")
+        let env = TempEnvironment()
+        let m = AccountManager(paths: env.paths)
+        try m.load()
+        var a = try m.addManagedAccount(provider: .claude, name: "Work", seed: ProfileSeedOptions(copyClaudeUserSettings: false, copyCodexConfig: false))
+        a.shortLabel = "WRK"
+        try m.update(a)
+        XCTAssertEqual(try AccountManager(paths: env.paths).load().first { $0.key == a.key }?.shortLabel, "WRK")
+    }
+
     func testIdentityAndAuthAreStored() throws {
         let env = TempEnvironment()
         let m = AccountManager(paths: env.paths)

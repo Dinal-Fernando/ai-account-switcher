@@ -27,7 +27,22 @@ struct GeneralSettingsView: View {
         @Bindable var model = model
         Form {
             Toggle("Show icon in the Dock", isOn: $model.settings.showDockIcon)
-            Toggle("Show percentage next to the menu bar icon", isOn: $model.settings.menuBarShowsPercent)
+            Section("Menu bar") {
+                Picker("Show", selection: $model.settings.menuBarMode) {
+                    ForEach(MenuBarMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Picker("Number", selection: $model.settings.menuBarWindow) {
+                    ForEach(MenuBarWindow.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                if model.settings.menuBarMode == .allAccounts {
+                    Toggle("Compact (no rings, no % sign)", isOn: $model.settings.menuBarCompact)
+                    Toggle("Mini ring per account", isOn: $model.settings.menuBarShowRings).disabled(model.settings.menuBarCompact)
+                    Text("Each account appears as a short label with its usage; a dot marks the active account of each provider. Labels default to the initials of the account name — change them with Rename… on a card.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Toggle("Show percentage next to the icon", isOn: $model.settings.menuBarShowsPercent)
+                }
+            }
             Toggle("Launch at login", isOn: $launchAtLogin)
                 .disabled(!LaunchAtLogin.isAvailable)
                 .onChange(of: launchAtLogin) { _, v in

@@ -64,8 +64,10 @@ name expected for each profile so you can check Keychain Access yourself.
 * Phase 2 – **Unified usage dashboard**: 5-hour / weekly / per-model weekly (Claude), extra usage, Codex
   credits, reset countdowns, rings or pace graph, stale/offline/rate-limited states, per-account isolation of
   failures, usage history sparkline.
-* Phase 3 – **Menu bar + notifications**: active account per provider with 5-hour/weekly/remaining time and a
-  *real* switch menu; threshold alerts with a **Switch account** action that changes the CLI selection.
+* Phase 3 – **Menu bar + notifications**: the menu bar label shows *every* account as a short label with its
+  weekly (or 5-hour) usage, colored by threshold, with a dot on the active one (`● WK 12%  PER 41%  ● CX 8%`;
+  compact and active-only modes available); the popover lists each provider's accounts with a *real* switch
+  menu; threshold alerts carry a **Switch account** action that changes the CLI selection.
 * Phase 4 – Opt-in automatic switching when the active account is exhausted; Claude status-line *beacon*
   (supported data source: values Claude Code itself reports) as a complement to the undocumented endpoints.
 

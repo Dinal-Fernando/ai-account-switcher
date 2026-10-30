@@ -95,10 +95,12 @@ public struct Account: Codable, Identifiable, Equatable, Sendable {
     /// Claude only: the profile's settings.json points its statusLine at the aiswitch beacon.
     public var statusLineBeacon: Bool
     public var notes: String?
+    /// Optional 1–4 character label for the menu bar; defaults to the initials of `name`.
+    public var shortLabel: String?
 
     public init(id: String, provider: Provider, name: String, kind: ProfileKind, createdAt: Date = Date(),
                 identity: AccountIdentity? = nil, lastAuth: AuthStatus? = nil, usageSource: UsageSource = .cliLogin,
-                statusLineBeacon: Bool = false, notes: String? = nil) {
+                statusLineBeacon: Bool = false, notes: String? = nil, shortLabel: String? = nil) {
         self.id = id
         self.provider = provider
         self.name = name
@@ -109,6 +111,22 @@ public struct Account: Codable, Identifiable, Equatable, Sendable {
         self.usageSource = usageSource
         self.statusLineBeacon = statusLineBeacon
         self.notes = notes
+        self.shortLabel = shortLabel
+    }
+
+    /// Initials used in the menu bar when no explicit short label is set: "Claude Work" → "CW",
+    /// "Personal" → "PER", untouched default accounts → "CL" / "CX".
+    public static func initials(of name: String, provider: Provider) -> String {
+        let words = name.split { !$0.isLetter && !$0.isNumber }.map(String.init).filter { !$0.isEmpty }
+        if words.isEmpty { return provider == .claude ? "CL" : "CX" }
+        if words.count == 1 { return String(words[0].prefix(3)).uppercased() }
+        return words.prefix(3).compactMap { $0.first }.map { String($0).uppercased() }.joined()
+    }
+
+    public var displayShortLabel: String {
+        if let s = shortLabel?.trimmingCharacters(in: .whitespaces), !s.isEmpty { return String(s.prefix(4)).uppercased() }
+        if isDefault, name == Account.makeDefault(provider: provider).name { return provider == .claude ? "CL" : "CX" }
+        return Self.initials(of: name, provider: provider)
     }
 
     public var key: AccountKey { AccountKey(provider, id) }
@@ -122,7 +140,7 @@ public struct Account: Codable, Identifiable, Equatable, Sendable {
 
     // Tolerate older documents missing newer keys.
     private enum CodingKeys: String, CodingKey {
-        case id, provider, name, kind, createdAt, identity, lastAuth, usageSource, statusLineBeacon, notes
+        case id, provider, name, kind, createdAt, identity, lastAuth, usageSource, statusLineBeacon, notes, shortLabel
     }
 
     public init(from decoder: Decoder) throws {
@@ -137,5 +155,6 @@ public struct Account: Codable, Identifiable, Equatable, Sendable {
         usageSource = try c.decodeIfPresent(UsageSource.self, forKey: .usageSource) ?? .cliLogin
         statusLineBeacon = try c.decodeIfPresent(Bool.self, forKey: .statusLineBeacon) ?? false
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        shortLabel = try c.decodeIfPresent(String.self, forKey: .shortLabel)
     }
 }

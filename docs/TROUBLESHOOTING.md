@@ -61,6 +61,11 @@ integration (Settings → Shell → Install / repair) or `aiswitch install-shell
 Settings → Shell → Uninstall, or `Scripts/uninstall-shell-integration.sh [--restore] [--purge --yes]`.
 `--restore` puts back the exact rc file saved at install time. Profiles stay unless you purge.
 
+## Menu bar label too wide / hard to read
+Settings → General → Menu bar: switch to *Compact* (`WK12 PER41 CX8`), turn off the mini rings, or use
+*Active accounts only*. Short labels are edited per account with Rename… (up to 4 characters). The label is
+rendered as an image so its threshold colors survive both light and dark menu bars.
+
 ## Logs
 `~/.aiswitch/logs/aiswitch.log` (secrets redacted). The wrapper prints its resolution with
 `AISWITCH_DEBUG=1 claude --version`.

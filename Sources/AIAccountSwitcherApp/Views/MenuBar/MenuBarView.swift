@@ -43,7 +43,7 @@ import SwitcherCore
                         Button {
                             Task { await model.setActive(account) }
                         } label: {
-                            let pct = model.usageState(account).effectiveSnapshot?.primaryPercent.map { " · \(Int($0.rounded()))%" } ?? ""
+                            let pct = model.menuBarPercent(model.usageState(account).effectiveSnapshot).map { " · \(Int($0.rounded()))%" } ?? ""
                             if model.activeIds[provider] == account.id {
                                 Label("\(account.name)\(pct)", systemImage: "checkmark")
                             } else {
@@ -59,8 +59,13 @@ import SwitcherCore
             }
             if let active {
                 HStack(spacing: 12) {
-                    UsageRingView(percent: snap?.fiveHour?.usedPercent, label: "5-hour", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
-                    UsageRingView(percent: snap?.weekly?.usedPercent, label: "Weekly", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
+                    if model.settings.menuBarWindow == .weekly {
+                        UsageRingView(percent: snap?.weekly?.usedPercent, label: "Weekly", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
+                        UsageRingView(percent: snap?.fiveHour?.usedPercent, label: "5-hour", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
+                    } else {
+                        UsageRingView(percent: snap?.fiveHour?.usedPercent, label: "5-hour", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
+                        UsageRingView(percent: snap?.weekly?.usedPercent, label: "Weekly", size: 56, lineWidth: 6, showRemaining: model.settings.showRemaining)
+                    }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(active.name).font(.headline).lineLimit(1)
                         if let id = active.identity?.email { Text(id).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }

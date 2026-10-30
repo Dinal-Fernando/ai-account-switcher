@@ -7,6 +7,7 @@ import SwitcherCore
     let account: Account
     @State private var showRename = false
     @State private var newName = ""
+    @State private var newShortLabel = ""
     @State private var confirmRemove = false
     @State private var showHistory = false
 
@@ -201,7 +202,7 @@ import SwitcherCore
                     Button("Re-authenticate…") { model.startLogin(account) }
                     if account.provider == .codex { Button("Sign in with device code…") { model.startLogin(account, deviceAuth: true) } }
                     Divider()
-                    Button("Rename…") { newName = account.name; showRename = true }
+                    Button("Rename…") { newName = account.name; newShortLabel = account.shortLabel ?? ""; showRename = true }
                     Button(showHistory ? "Hide history" : "Show history") { showHistory.toggle() }
                 }
                 Menu("Usage source") {
@@ -242,10 +243,15 @@ import SwitcherCore
         VStack(alignment: .leading, spacing: 12) {
             Text("Rename account").font(.headline)
             TextField("Name", text: $newName).textFieldStyle(.roundedBorder).frame(width: 280)
+            TextField("Menu bar label (blank = \(Account.initials(of: newName, provider: account.provider)))", text: $newShortLabel)
+                .textFieldStyle(.roundedBorder).frame(width: 280)
+                .onChange(of: newShortLabel) { _, v in if v.count > 4 { newShortLabel = String(v.prefix(4)) } }
+            Text("Up to 4 characters, shown next to this account's usage in the menu bar.").font(.caption).foregroundStyle(.secondary)
             HStack {
                 Spacer()
                 Button("Cancel") { showRename = false }
-                Button("Save") { model.rename(account, to: newName); showRename = false }.buttonStyle(.borderedProminent).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Save") { model.update(account, name: newName, shortLabel: newShortLabel); showRename = false }
+                    .buttonStyle(.borderedProminent).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(20)

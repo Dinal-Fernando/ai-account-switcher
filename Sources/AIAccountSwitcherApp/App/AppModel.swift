@@ -243,6 +243,20 @@ final class AppModel {
         do { try runtime.accounts.rename(account.key, to: name); reloadAccounts() } catch { errorMessage = error.localizedDescription }
     }
 
+    /// Rename sheet: name plus the menu bar short label (empty = use initials).
+    func update(_ account: Account, name: String, shortLabel: String?) {
+        do {
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedName.isEmpty, trimmedName != account.name { try runtime.accounts.rename(account.key, to: trimmedName) }
+            if var current = runtime.accounts.account(account.key) {
+                let label = (shortLabel ?? "").trimmingCharacters(in: .whitespaces)
+                current.shortLabel = label.isEmpty ? nil : String(label.prefix(4))
+                try runtime.accounts.update(current)
+            }
+            reloadAccounts()
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     func remove(_ account: Account, deleteDirectory: Bool) async {
         do {
             try runtime.accounts.remove(account.key, deleteProfileDirectory: deleteDirectory)
@@ -388,14 +402,43 @@ final class AppModel {
 
     // MARK: menu bar
 
+    /// The percentage the menu bar shows for a reading: weekly by default, 5-hour on request, with fallback.
+    func menuBarPercent(_ snapshot: UsageSnapshot?) -> Double? {
+        guard let snapshot else { return nil }
+        switch settings.menuBarWindow {
+        case .weekly: return snapshot.weekly?.usedPercent ?? snapshot.fiveHour?.usedPercent
+        case .fiveHour: return snapshot.fiveHour?.usedPercent ?? snapshot.weekly?.usedPercent
+        }
+    }
+
+    /// One segment per account that has a reading or is active, Claude first then Codex.
+    var menuBarSegments: [MenuBarSegment] {
+        var out: [MenuBarSegment] = []
+        for provider in Provider.allCases {
+            for account in accounts(for: provider) {
+                let isActive = activeIds[provider] == account.id
+                let percent = menuBarPercent(usageState(account).effectiveSnapshot)
+                if percent == nil && !isActive { continue }
+                out.append(MenuBarSegment(label: account.displayShortLabel, percent: percent, isActive: isActive, provider: provider))
+            }
+        }
+        return out
+    }
+
     var menuBarIcon: NSImage {
-        let claude = activeAccount(for: .claude).flatMap { usageState($0).effectiveSnapshot?.primaryPercent }
-        let codex = activeAccount(for: .codex).flatMap { usageState($0).effectiveSnapshot?.primaryPercent }
-        return MenuBarIconRenderer.image(claudePercent: claude, codexPercent: codex)
+        switch settings.menuBarMode {
+        case .allAccounts:
+            return MenuBarIconRenderer.image(segments: menuBarSegments, compact: settings.menuBarCompact, showRings: settings.menuBarShowRings)
+        case .activeOnly:
+            let claude = activeAccount(for: .claude).flatMap { menuBarPercent(usageState($0).effectiveSnapshot) }
+            let codex = activeAccount(for: .codex).flatMap { menuBarPercent(usageState($0).effectiveSnapshot) }
+            return MenuBarIconRenderer.image(claudePercent: claude, codexPercent: codex)
+        }
     }
 
     var menuBarText: String? {
-        guard settings.menuBarShowsPercent, let a = activeAccount(for: .claude), let p = usageState(a).effectiveSnapshot?.primaryPercent else { return nil }
+        guard settings.menuBarMode == .activeOnly, settings.menuBarShowsPercent,
+              let a = activeAccount(for: .claude), let p = menuBarPercent(usageState(a).effectiveSnapshot) else { return nil }
         return "\(Int(p.rounded()))%"
     }
 }
