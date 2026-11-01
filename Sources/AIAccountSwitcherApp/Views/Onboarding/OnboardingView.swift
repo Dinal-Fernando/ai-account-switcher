@@ -125,6 +125,7 @@ import SwitcherCore
                 Button("Add Codex account…") { addProvider = .codex }
             }
             Text("Then click Set Active on a card; the next claude / codex you type uses that account. Running sessions are never reassigned.").font(.caption).foregroundStyle(.secondary)
+            Text("Command-line fans: Scripts/build-app.sh --link puts the aiswitch tool on your PATH (aiswitch use, which, usage, sessions, doctor).").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

@@ -77,6 +77,9 @@ rendered as an image so its threshold colors survive both light and dark menu ba
 ## Live usage does not appear / LIVE badge missing
 * The beacon only receives numbers from claude.ai Pro and Max logins, and only while a `claude` session in that
   account is running and after its first response. Idle accounts fall back to the polled numbers.
+* Sessions that were already open when you turned the toggle on keep their old status line. Start a new
+  `claude` session; the first LIVE reading arrives after its first response.
+* Codex has no status-line hook, so `aiswitch beacon codex …` only prints a note; Codex numbers stay polled.
 * Check the switch: `aiswitch beacon claude <account> status` prints whether the profile's settings.json points at
   the beacon, the chained previous status line (if any), and the file the app watches
   (`~/.aiswitch/usage/claude-<profile>.statusline.json`); its timestamp should move while you chat.

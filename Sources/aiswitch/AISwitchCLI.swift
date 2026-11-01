@@ -294,7 +294,10 @@ struct AISwitchCLI {
 
     static func beaconCommand(_ runtime: SwitcherRuntime, _ positional: [String]) throws {
         let a = try account(runtime, positional)
-        guard a.provider == .claude else { throw CLIError("the status-line beacon is a Claude Code feature") }
+        guard a.provider == .claude else {
+            print("Live usage from the status line is only available for Claude Code accounts; Codex has no status-line hook, so its numbers stay polled.")
+            return
+        }
         let action = positional.count > 2 ? positional[2] : "status"
         switch action {
         case "on":

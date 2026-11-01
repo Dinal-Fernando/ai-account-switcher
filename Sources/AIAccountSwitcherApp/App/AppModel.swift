@@ -419,7 +419,7 @@ final class AppModel {
                     try AtomicFile.write(EmbeddedScripts.statusLine + "\n", to: runtime.paths.statusLineBeacon, permissions: 0o755)
                 }
                 try runtime.profiles.installStatusLineBeacon(for: account)
-                infoMessage = "Live usage is on for '\(account.name)'. Numbers update the moment Claude Code reports them, while a session in that account is running (Pro and Max plans only)."
+                infoMessage = "Live usage is on for '\(account.name)'. Start a new claude session in that account (sessions already running keep their old status line); from its first response on, the card updates the moment Claude Code reports numbers. Pro and Max plans only."
             } else {
                 try runtime.profiles.removeStatusLineBeacon(for: account)
                 infoMessage = "Live usage is off for '\(account.name)'; its previous status line (if any) was restored."

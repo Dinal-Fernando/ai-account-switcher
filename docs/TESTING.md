@@ -98,7 +98,8 @@ block; a backup exists in `~/.aiswitch/backups/`. Re-install from Settings and c
 1. Card `Claude A` → ⋯ → *Live usage from status line* (a check mark appears). `aiswitch beacon claude "Claude A"
    status` prints "live usage on"; the profile's settings.json contains the beacon command; if a status line was
    configured before, `~/.aiswitch/config/statusline-chain-<id>` holds it and it still renders inside `claude`.
-2. Run `claude` in that account and send one message. Expected: within about a second the card shows a green
+2. Start a **new** `claude` session in that account (already-open sessions keep their old status line) and send
+   one message. Expected: within about a second the card shows a green
    **LIVE** pill with "Reported by Claude Code's status line just now" and the 5-hour/weekly numbers match the
    `/usage` screen. The menu bar label updates at the same time.
 3. Toggle it off: the check mark disappears, settings.json has the previous status line back (or no statusLine

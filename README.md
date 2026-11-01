@@ -84,7 +84,8 @@ name expected for each profile so you can check Keychain Access yourself.
 
 ```bash
 git clone <this repo> && cd ai-account-switcher
-Scripts/build-app.sh --open          # SwiftPM build + ad-hoc signed bundle in build/AIAccountSwitcher.app
+Scripts/build-app.sh --open --link   # SwiftPM build + ad-hoc signed bundle in build/AIAccountSwitcher.app,
+                                     # launched, with ~/.local/bin/aiswitch linked to the bundled CLI
 ```
 or open `Xcode/AIAccountSwitcher.xcodeproj` (Xcode 16+) and press Run. No paid developer account needed.
 
@@ -93,7 +94,7 @@ Then follow the onboarding: detect CLIs → install the wrappers → verify → 
 Command line equivalent:
 
 ```bash
-build/AIAccountSwitcher.app/Contents/MacOS/aiswitch install-shell
+aiswitch install-shell               # (after --link; otherwise build/AIAccountSwitcher.app/Contents/MacOS/aiswitch)
 aiswitch add claude "Claude Work" && aiswitch login claude "Claude Work"
 aiswitch use claude "Claude Work"
 aiswitch which claude          # prints binary, profile, config dir, identity

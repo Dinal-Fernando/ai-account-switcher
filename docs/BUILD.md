@@ -9,7 +9,8 @@ apps you build yourself).
 ```bash
 Scripts/build-app.sh            # release build → build/AIAccountSwitcher.app
 Scripts/build-app.sh --debug
-Scripts/build-app.sh --open     # and launch it
+Scripts/build-app.sh --open     # and (re)launch it
+Scripts/build-app.sh --link     # and symlink ~/.local/bin/aiswitch to the bundled CLI
 ```
 
 What it does: `swift build -c release` for the `AIAccountSwitcherApp` and `aiswitch` products, assembles

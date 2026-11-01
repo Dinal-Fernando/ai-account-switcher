@@ -2,15 +2,17 @@
 # build-app.sh -- builds AIAccountSwitcher.app without Xcode project files (SwiftPM + manual bundling) or,
 # with --xcode, through xcodebuild. No paid Apple Developer account is needed: the bundle is ad-hoc signed.
 #
-# Usage: Scripts/build-app.sh [--xcode] [--debug] [--open]
+# Usage: Scripts/build-app.sh [--xcode] [--debug] [--open] [--link]
+#   --link   also symlink ~/.local/bin/aiswitch to the bundled CLI (and tell you if ~/.local/bin is not on PATH)
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-use_xcode=0; config=release; open_after=0
+use_xcode=0; config=release; open_after=0; link_cli=0
 for a in "$@"; do
   case "$a" in
     --xcode) use_xcode=1 ;;
     --debug) config=debug ;;
     --open) open_after=1 ;;
+    --link) link_cli=1 ;;
     -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
     *) echo "unknown option $a" >&2; exit 2 ;;
   esac
@@ -45,5 +47,19 @@ fi
 
 codesign --force --deep --sign - "$app"
 echo "built $app"
-echo "CLI: $app/Contents/MacOS/aiswitch  (symlink it into your PATH if you like, e.g. ln -sf \"$PWD/$app/Contents/MacOS/aiswitch\" ~/.local/bin/aiswitch)"
-if [ "$open_after" = 1 ]; then open "$app"; fi
+cli="$PWD/$app/Contents/MacOS/aiswitch"
+if [ "$link_cli" = 1 ]; then
+  mkdir -p "$HOME/.local/bin"
+  ln -sf "$cli" "$HOME/.local/bin/aiswitch"
+  echo "linked ~/.local/bin/aiswitch -> $cli"
+  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "note: ~/.local/bin is not on your PATH; add 'export PATH=\"\$HOME/.local/bin:\$PATH\"' to ~/.zshrc" ;; esac
+else
+  echo "CLI: $cli"
+  echo "     run again with --link to install it as ~/.local/bin/aiswitch"
+fi
+if [ "$open_after" = 1 ]; then
+  # relaunch so a running copy picks up the new build
+  osascript -e 'tell application "AIAccountSwitcher" to quit' >/dev/null 2>&1 || true
+  sleep 1
+  open "$app"
+fi
