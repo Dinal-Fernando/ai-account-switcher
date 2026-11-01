@@ -80,6 +80,40 @@ final class ProviderAndDiagnosticsTests: XCTestCase {
         do { _ = try await provider.fetchUsage(account: none); XCTFail() } catch let e as UsageFetchError { if case .noCredential = e {} else { XCTFail("\(e)") } }
     }
 
+    func testLapsedClaudeTokenAsksCLIToRenewAndPausesOtherwise() async throws {
+        let env = TempEnvironment()
+        let runner = FakeProcessRunner()
+        let exe = env.makeFakeExecutable("claude")
+        try AtomicFile.write(exe + "\n", to: env.paths.realExecutableFile(.claude))
+        runner.script("claude auth", ProcessResult(exitCode: 0, stdout: "{\"loggedIn\":true}", stderr: ""))
+        let http = FakeHTTPClient()
+        let ctx = ProviderContext(paths: env.paths, runner: runner, http: http, baseEnvironment: ["HOME": env.home.path, "PATH": "/usr/bin", "USER": "jane"])
+        let provider = ClaudeProvider(context: ctx)
+        let dir = try CLIProfileManager(paths: env.paths).createProfileDirectory(provider: .claude, id: "idle-1", options: ProfileSeedOptions(copyClaudeUserSettings: false, copyCodexConfig: false))
+        let creds = dir.appendingPathComponent(".credentials.json")
+        let past = Int(Date().addingTimeInterval(-3600).timeIntervalSince1970 * 1000)
+        try "{\"claudeAiOauth\":{\"accessToken\":\"sk-ant-oat01-old\",\"expiresAt\":\(past)}}".write(to: creds, atomically: true, encoding: .utf8)
+        let account = Account(id: "idle-1", provider: .claude, name: "Idle", kind: .managed)
+        do { _ = try await provider.fetchUsage(account: account); XCTFail("should pause") } catch let e as UsageFetchError {
+            XCTAssertEqual(e, .credentialExpired(ClaudeProvider.pausedMessage))
+        }
+        XCTAssertTrue(runner.calls.contains { $0.arguments == ["auth", "status"] }, "the vendor CLI is asked to renew")
+        XCTAssertTrue(http.requests.isEmpty, "no request is made with a lapsed token")
+        XCTAssertFalse(await provider.refreshCredential(account: account))
+        // the vendor renewed the token (simulated): the next fetch works
+        let future = Int(Date().addingTimeInterval(7200).timeIntervalSince1970 * 1000)
+        try "{\"claudeAiOauth\":{\"accessToken\":\"sk-ant-oat01-new\",\"expiresAt\":\(future)}}".write(to: creds, atomically: true, encoding: .utf8)
+        XCTAssertTrue(await provider.refreshCredential(account: account))
+        http.script(ClaudeProvider.usageURL.absoluteString, HTTPResponse(status: 200, body: Data("{\"five_hour\":{\"utilization\":5}}".utf8)))
+        let snap = try await provider.fetchUsage(account: account)
+        XCTAssertEqual(snap.fiveHour?.usedPercent, 5)
+        XCTAssertEqual(http.requests.last?.1["Authorization"], "Bearer sk-ant-oat01-new")
+        // version advice
+        XCTAssertTrue(provider.compatibilityIssues(version: "2.1.300 (Claude Code)", account: nil).contains { $0.id == "claude-refresh-version" })
+        XCTAssertFalse(provider.compatibilityIssues(version: "2.1.314 (Claude Code)", account: nil).contains { $0.id == "claude-refresh-version" })
+        XCTAssertFalse(ClaudeProvider.pausedMessage.contains("`"))
+    }
+
     func testCodexUsageFetchReadsAuthJSONAndSendsAccountHeader() async throws {
         let env = TempEnvironment()
         let http = FakeHTTPClient()

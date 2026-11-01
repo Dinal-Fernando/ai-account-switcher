@@ -34,7 +34,15 @@ Claude Code stores logins with `/usr/bin/security`; the app reads them the same 
 monitoring. macOS may ask once to allow access — choose *Always Allow* — or disable usage monitoring for
 that account (card menu → Usage source → Disabled). Switching never needs Keychain access.
 
-## Usage shows “Stale”, “Rate limited”, “Login needed”
+## “Usage paused · last reading 3 h ago”
+The account is signed in; only the usage monitor's copy of its access token lapsed because the account was
+idle (tokens last about eight hours and Claude Code renews them when the account is used). The last numbers
+stay visible. Click **Refresh now** on the card: the app runs the vendor's own status command inside that
+profile, which renews the token on Claude Code 2.1.301 and newer (Diagnostics warns on older builds; run
+`claude update`). Otherwise use the account once (Open Terminal, run `claude`, quit) and the reading resumes
+within a few minutes. Codex renews only when used.
+
+## Usage shows “Stale”, “Rate limited”, “Sign-in needed”
 * *Rate limited*: the Anthropic endpoint answers bursts with 429. The app backs off (1 → 30 min, honouring
   `Retry-After`). Do not run several monitoring tools against the same account.
 * *Login needed*: the stored access token expired or was rejected. Run `claude` / `codex` once in that profile

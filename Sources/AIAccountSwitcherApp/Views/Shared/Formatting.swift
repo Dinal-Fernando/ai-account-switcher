@@ -55,7 +55,7 @@ struct StatusDot: View {
         switch status {
         case .fresh: return .green
         case .refreshing: return .blue
-        case .stale, .rateLimited, .offline: return .orange
+        case .stale, .rateLimited, .offline, .paused: return .orange
         case .error, .sessionExpired: return .red
         case .never, .disabled: return .gray
         }

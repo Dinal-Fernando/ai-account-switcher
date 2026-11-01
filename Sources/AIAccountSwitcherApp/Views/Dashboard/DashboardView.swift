@@ -47,7 +47,7 @@ import SwitcherCore
         if model.shellStatus.loginShellProbed && !model.shellIntegrationActive {
             Banner(style: .warning, icon: "terminal",
                    title: "Shell integration is not active",
-                   message: "Terminal still runs the plain `claude`/`codex`, so Set Active has no effect on new commands yet. Install it (reversible, backs up ~/.zshrc).",
+                   message: "Terminal still runs the plain claude/codex, so Set Active has no effect on new commands yet. Install it (reversible, backs up ~/.zshrc).",
                    actionTitle: "Install shell integration") { Task { await model.installShellIntegration(addPathBlock: true) } }
         }
         if let msg = model.errorMessage {
@@ -70,7 +70,7 @@ import SwitcherCore
     private var footerNote: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("How switching works").font(.caption.weight(.semibold))
-            Text("Set Active writes the selection atomically to ~/.aiswitch/state; the `claude`/`codex` wrappers read it on every launch and export only CLAUDE_CONFIG_DIR / CODEX_HOME. Sessions already running keep their account. Usage numbers come from undocumented vendor endpoints (see docs/ENDPOINTS.md) and may lag or be rate-limited.")
+            Text("Set Active writes the selection atomically to ~/.aiswitch/state; the claude/codex wrappers read it on every launch and export only CLAUDE_CONFIG_DIR / CODEX_HOME. Sessions already running keep their account. Usage numbers come from undocumented vendor endpoints (see docs/ENDPOINTS.md) and may lag or be rate-limited.")
                 .font(.caption).foregroundStyle(.secondary)
             if let last = model.lastRefresh { Text("Last refresh \(UsageFormat.age(last, now: model.now))").font(.caption2).foregroundStyle(.secondary) }
         }

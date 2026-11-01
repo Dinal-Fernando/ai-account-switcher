@@ -304,7 +304,7 @@ final class AppModel {
         do {
             try runtime.shell.uninstall(rcFiles: runtime.shell.defaultRCFiles(), restoreBackups: restoreBackups, purgeEverything: false)
             await probeShell()
-            infoMessage = "Shell integration removed. New terminals use the plain `claude` / `codex` again."
+            infoMessage = "Shell integration removed. New terminals use the plain claude / codex again."
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -394,6 +394,24 @@ final class AppModel {
     }
 
     func history(_ account: Account) -> [UsageCache.HistoryPoint] { runtime.cache.history(account.key) }
+
+    /// "Refresh now" on a paused card: ask the vendor CLI to renew the token, then fetch usage again.
+    func refreshCredential(_ account: Account) async {
+        busyKeys.insert(account.key)
+        defer { busyKeys.remove(account.key) }
+        var renewed = true
+        if account.provider == .claude, let claude = runtime.adapters[.claude] as? ClaudeProvider {
+            renewed = await claude.refreshCredential(account: account)
+        }
+        if renewed {
+            _ = await runtime.monitor.refresh(account, force: true)
+            usage = await runtime.monitor.allStates()
+            if case .paused = usageState(account).status { renewed = false }
+        }
+        if !renewed {
+            infoMessage = "'\(account.name)' still has a lapsed token. Use the account once (Open Terminal, run \(account.provider.executableName), then quit) and the reading resumes by itself."
+        }
+    }
 
     // MARK: sessions
 

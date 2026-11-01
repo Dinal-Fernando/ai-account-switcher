@@ -31,6 +31,10 @@ public struct ClaudeProvider: ProviderAdapter {
     public static let betaHeader = "oauth-2025-04-20"
     /// `claude auth status --json` gained `configDirectory` in this version; we use it to prove the profile was honoured.
     public static let minimumVerifiedVersion = VersionNumber([2, 1, 268])
+    /// Before this version a short command such as `auth status` could exit in the middle of a token renewal.
+    public static let tokenRefreshFixedVersion = VersionNumber([2, 1, 301])
+    public static let pausedMessage = "This account has not been used for a while, so its usage token lapsed. Claude Code renews it the next time you use the account; Refresh now asks it to renew right away."
+
 
     public let provider: Provider = .claude
     public let context: ProviderContext
@@ -91,14 +95,11 @@ public struct ClaudeProvider: ProviderAdapter {
             throw UsageFetchError.noCredential("No claude.ai login found for this profile. Sign in first.")
         }
         if let c = credential, c.isExpired(now: now) {
-            // Let Claude Code refresh its own token (auth status triggers the vendor's refresh path).
-            if let exe = executablePath() {
-                _ = try? await context.runner.runAsync(exe, arguments: ["auth", "status"], environment: context.cliEnvironment(for: account), timeout: 90)
+            // Let Claude Code renew its own token (auth status triggers the vendor's refresh path on ≥ 2.1.301).
+            guard await refreshCredential(account: account) else {
+                throw UsageFetchError.credentialExpired(Self.pausedMessage)
             }
             credential = reader.read(account: account)
-            if let c2 = credential, c2.isExpired(now: context.time.now) {
-                throw UsageFetchError.credentialExpired("The stored access token has expired. Run `claude` in this profile once to refresh it.")
-            }
         }
         guard let token = credential?.accessToken else { throw UsageFetchError.noCredential("No claude.ai login found for this profile.") }
         let headers = ["Authorization": "Bearer \(token)", "anthropic-beta": Self.betaHeader,
@@ -121,6 +122,16 @@ public struct ClaudeProvider: ProviderAdapter {
         return snapshot
     }
 
+    /// Asks Claude Code to renew the stored token by running `auth status` inside the profile, then re-reads it.
+    /// Returns true when a non-expired token is available afterwards. Never touches the Keychain itself.
+    public func refreshCredential(account: Account) async -> Bool {
+        if let exe = executablePath() {
+            _ = try? await context.runner.runAsync(exe, arguments: ["auth", "status"], environment: context.cliEnvironment(for: account), timeout: 120)
+        }
+        guard let c = ClaudeCredentialReader(context: context).read(account: account) else { return false }
+        return !c.isExpired(now: context.time.now)
+    }
+
     /// Latest values observed by Claude Code itself (status-line beacon), if the beacon is installed for this profile.
     public func beaconSnapshot(account: Account) -> UsageSnapshot? {
         let file = context.paths.statusLineBeaconFile(profileId: account.id)
@@ -134,12 +145,16 @@ public struct ClaudeProvider: ProviderAdapter {
         var issues: [CompatibilityIssue] = []
         guard let version else {
             issues.append(CompatibilityIssue(id: "claude-version-unknown", severity: .warning, title: "Claude Code version unknown",
-                                             detail: "Could not run `claude --version`. Per-profile Keychain isolation is documented for current releases; verify with `claude auth status` inside each profile."))
+                                             detail: "Could not run claude --version. Per-profile Keychain isolation is documented for current releases; verify with claude auth status inside each profile."))
             return issues
         }
         if let v = VersionNumber(parsing: version), v < Self.minimumVerifiedVersion {
             issues.append(CompatibilityIssue(id: "claude-version-old", severity: .warning, title: "Claude Code \(v) is older than \(Self.minimumVerifiedVersion)",
-                                             detail: "Versions before 2.1.268 do not report `configDirectory` in `claude auth status`, so the switcher cannot prove a profile was honoured. Older builds also stored every login under one Keychain item. Update with `claude update`, or verify isolation manually (docs/TESTING.md)."))
+                                             detail: "Versions before 2.1.268 do not report configDirectory in claude auth status, so the switcher cannot prove a profile was honoured. Older builds also stored every login under one Keychain item. Update with claude update, or verify isolation manually (docs/TESTING.md)."))
+        }
+        if let v = VersionNumber(parsing: version), v < Self.tokenRefreshFixedVersion {
+            issues.append(CompatibilityIssue(id: "claude-refresh-version", severity: .warning, title: "Claude Code \(v) may not finish token renewals started by short commands",
+                                             detail: "Usage monitoring of idle accounts depends on Claude Code renewing their tokens; before 2.1.301 the renewal could be cut off. Update with: claude update"))
         }
         if let account, let auth = account.lastAuth, let m = auth.method, m == "api_key" || m == "api_key_helper" {
             issues.append(CompatibilityIssue(id: "claude-console-login", severity: .warning, title: "Console sign-in is not isolated per profile",

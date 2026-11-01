@@ -63,7 +63,7 @@ public struct CodexProvider: ProviderAdapter {
     public func fetchUsage(account: Account) async throws -> UsageSnapshot {
         guard account.usageSource == .cliLogin else { throw UsageFetchError.disabled }
         if let setting = credentialStoreSetting(account: account), setting != "file", setting != "auto" {
-            throw UsageFetchError.unsupported("Credentials are stored in the OS keyring (cli_auth_credentials_store = \"\(setting)\"); switch the profile to file storage to monitor usage.")
+            throw UsageFetchError.unsupported("This profile keeps its login in the system keyring (credential store: \(setting)), which the usage monitor cannot read. Switch the profile to file storage to see its quota.")
         }
         guard let auth = readAuthFile(account: account) else {
             throw UsageFetchError.noCredential("No Codex login found for this profile (auth.json missing). Sign in first.")
@@ -74,7 +74,7 @@ public struct CodexProvider: ProviderAdapter {
         }
         let now = context.time.now
         if let exp = JWT.expiry(token), exp.timeIntervalSince(now) < 60 {
-            throw UsageFetchError.credentialExpired("The stored Codex access token has expired. Run `codex` in this profile once so it refreshes its login.")
+            throw UsageFetchError.credentialExpired("This account has not been used for a while, so its Codex usage token lapsed. Codex renews it the next time you use the account.")
         }
         var headers = ["Authorization": "Bearer \(token)", "Accept": "application/json", "User-Agent": context.userAgent]
         let accountId = auth.accountId ?? account.identity?.accountId
@@ -101,7 +101,7 @@ public struct CodexProvider: ProviderAdapter {
         var issues: [CompatibilityIssue] = []
         if version == nil {
             issues.append(CompatibilityIssue(id: "codex-version-unknown", severity: .warning, title: "Codex version unknown",
-                                             detail: "Could not run `codex --version`. CODEX_HOME isolation is documented for current releases."))
+                                             detail: "Could not run codex --version. CODEX_HOME isolation is documented for current releases."))
         }
         if let account, let setting = credentialStoreSetting(account: account), setting == "ephemeral" {
             issues.append(CompatibilityIssue(id: "codex-ephemeral", severity: .blocking, title: "Ephemeral credential store",

@@ -137,6 +137,9 @@ public enum SyncStatus: Equatable, Sendable, Codable {
     case stale(at: Date, reason: String)
     case error(String)
     case sessionExpired(String)
+    /// The account is signed in, but the monitor's copy of its access token lapsed (idle account). The vendor
+    /// renews it when the account is used; the last reading is kept.
+    case paused(at: Date?, reason: String)
     case rateLimited(until: Date)
     case offline(lastSuccess: Date?)
     case disabled
@@ -155,7 +158,8 @@ public enum SyncStatus: Equatable, Sendable, Codable {
         case .fresh: return "Up to date"
         case .stale: return "Stale"
         case .error: return "Error"
-        case .sessionExpired: return "Login needed"
+        case .sessionExpired: return "Sign-in needed"
+        case .paused: return "Usage paused"
         case .rateLimited: return "Rate limited"
         case .offline: return "Offline"
         case .disabled: return "Disabled"
@@ -167,7 +171,8 @@ public enum SyncStatus: Equatable, Sendable, Codable {
         case .stale(_, let reason): return reason
         case .error(let message): return message
         case .sessionExpired(let message): return message
-        case .rateLimited(let until): return "Provider asked us to wait until \(until)"
+        case .paused(_, let reason): return reason
+        case .rateLimited(let until): return "The provider asked for a pause until \(until)"
         default: return nil
         }
     }

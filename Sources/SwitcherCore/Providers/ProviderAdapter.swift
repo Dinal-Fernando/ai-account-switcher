@@ -102,7 +102,7 @@ public extension ProviderAdapter {
     func classify(_ response: HTTPResponse) -> UsageFetchError? {
         switch response.status {
         case 200...299: return response.looksLikeHTML ? .blocked("The provider answered with an HTML page instead of JSON (bot check or outage).") : nil
-        case 401: return .unauthorized("The stored login was rejected (HTTP 401). Run \(provider.executableName) once to refresh it, or re-authenticate.")
+        case 401: return .unauthorized("The provider rejected this account's stored login (HTTP 401). Sign in again from this card.")
         case 403: return response.looksLikeHTML ? .blocked("Blocked by the provider's bot protection (HTTP 403).") : .unauthorized("Access denied (HTTP 403).")
         case 429: return .rateLimited(retryAfter: response.retryAfter)
         case 500...599: return .serverError(response.status)

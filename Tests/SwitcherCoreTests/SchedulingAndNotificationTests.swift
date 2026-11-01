@@ -12,6 +12,7 @@ final class SchedulingAndNotificationTests: XCTestCase {
         XCTAssertEqual(p.delay(afterConsecutiveFailures: 1, kind: .rateLimited(retryAfter: 99_999), random: 0), 3600, "Retry-After capped at 1 h")
         XCTAssertEqual(p.delay(afterConsecutiveFailures: 1, kind: .server, random: 1), 72, "20% jitter max")
         XCTAssertEqual(p.delay(afterConsecutiveFailures: 1, kind: .auth, random: 0), 600)
+        XCTAssertEqual(p.delay(afterConsecutiveFailures: 7, kind: .paused, random: 0), 300, "paused never grows")
         var s = BackoffState()
         let now = Date()
         s.recordFailure(.server, policy: p, now: now)

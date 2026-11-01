@@ -36,7 +36,7 @@ import SwitcherCore
             Toggle(provider == .claude ? "Copy settings.json, CLAUDE.md, commands, agents and skills from ~/.claude" : "Copy ~/.codex/config.toml (never auth.json)", isOn: $copySettings)
             Toggle("Monitor usage using this profile's own login (read-only)", isOn: $usageEnabled)
             if provider == .codex { Toggle("Use device-code login (headless/SSO friendly)", isOn: $deviceAuth) }
-            Text("Creates an isolated \(provider.configDirEnvVar) directory under ~/.aiswitch/profiles. The login itself is done by `\(provider.loginCommandDescription)` in a Terminal window — the app never sees your password.")
+            Text("Creates an isolated \(provider.configDirEnvVar) directory under ~/.aiswitch/profiles. The login itself happens in the \(provider.displayName) tool, in a Terminal window; the app never sees your password.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack {
@@ -64,12 +64,12 @@ import SwitcherCore
         VStack(alignment: .leading, spacing: 10) {
             if live.lastAuth?.isAuthenticated == true {
                 Label("Signed in\(live.identity?.email.map { " as \($0)" } ?? "")", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("You can now click Set Active on its card to route `\(provider.executableName)` to this account.").font(.caption).foregroundStyle(.secondary)
+                Text("You can now click Set Active on its card to route \(provider.executableName) to this account.").font(.caption).foregroundStyle(.secondary)
                 HStack { Spacer(); Button("Done") { dismiss() }.buttonStyle(.borderedProminent) }
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("A Terminal window is running `\(provider.loginCommandDescription)` for this profile. Complete the browser login; this sheet updates automatically.")
+                    Text("A Terminal window is signing this profile in with the \(provider.displayName) login flow. Complete the browser login; this sheet updates automatically.")
                         .font(.callout).fixedSize(horizontal: false, vertical: true)
                 }
                 Text("Profile directory: \(model.profilePath(live))").font(.caption2).foregroundStyle(.secondary).textSelection(.enabled)

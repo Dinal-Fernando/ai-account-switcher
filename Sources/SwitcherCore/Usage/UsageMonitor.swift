@@ -133,7 +133,10 @@ public actor UsageMonitor {
         case .rateLimited(let retryAfter):
             s.backoff.recordFailure(.rateLimited(retryAfter: retryAfter), policy: policy, now: now)
             s.status = .rateLimited(until: s.backoff.notBefore ?? now.addingTimeInterval(60))
-        case .unauthorized(let m), .credentialExpired(let m), .noCredential(let m):
+        case .credentialExpired(let m):
+            s.backoff.recordFailure(.paused, policy: policy, now: now)
+            s.status = .paused(at: cachedAt, reason: m)
+        case .unauthorized(let m), .noCredential(let m):
             s.backoff.recordFailure(.auth, policy: policy, now: now)
             s.status = .sessionExpired(m)
         case .network(let m):

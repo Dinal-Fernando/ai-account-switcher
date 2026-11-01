@@ -14,6 +14,8 @@ public struct BackoffPolicy: Sendable, Equatable {
         case server
         case network
         case auth
+        /// Idle-account token lapse: cheap to re-check, so a fixed short delay.
+        case paused
     }
 
     public init() {}
@@ -26,6 +28,7 @@ public struct BackoffPolicy: Sendable, Equatable {
             delay = max(delay, min(retryAfter, maxRetryAfter))
         }
         if kind == .auth { delay = max(delay, 10 * 60) }   // nothing to gain from retrying an expired login quickly
+        if kind == .paused { delay = 5 * 60 }                // re-check soon: the token comes back as soon as the account is used
         return delay * (1 + jitterFraction * min(1, max(0, random)))
     }
 }

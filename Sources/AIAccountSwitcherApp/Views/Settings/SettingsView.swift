@@ -107,7 +107,7 @@ struct NotificationSettingsView: View {
             thresholdPicker("Weekly window", values: $model.settings.thresholds.weekly)
             thresholdPicker("Per-model weekly", values: $model.settings.thresholds.modelWeekly)
             Section("Account recommendations") {
-                Text("When the active account crosses a threshold, the notification offers “Switch account” to the signed-in account with the most capacity left. Clicking it changes the account future `claude`/`codex` launches use.")
+                Text("When the active account crosses a threshold, the notification offers “Switch account” to the signed-in account with the most capacity left. Clicking it changes the account future claude/codex launches use.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Automatic switching (opt-in)") {

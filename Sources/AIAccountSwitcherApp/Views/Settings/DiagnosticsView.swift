@@ -41,7 +41,7 @@ struct DiagnosticsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                Text("Runs the same checks as `aiswitch doctor`: state directory, wrappers, recorded executables, login-shell PATH resolution, selected profiles, a wrapper dry-run, environment overrides, Keychain item names, CLI versions, compatibility, and a live sign-in check per active account.")
+                Text("Runs the same checks as aiswitch doctor: state directory, wrappers, recorded executables, login-shell PATH resolution, selected profiles, a wrapper dry-run, environment overrides, Keychain item names, CLI versions, compatibility, and a live sign-in check per active account.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
             }

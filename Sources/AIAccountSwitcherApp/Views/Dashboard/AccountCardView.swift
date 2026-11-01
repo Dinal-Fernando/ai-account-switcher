@@ -33,7 +33,7 @@ import SwitcherCore
             Button("Remove but keep the directory") { Task { await model.remove(account, deleteDirectory: false) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Deleting the directory signs this profile out of \(account.provider.displayName) on this Mac. Run `\(account.provider.executableName) auth logout` style logout first if you want the vendor session revoked.")
+            Text("Deleting the directory signs this profile out of \(account.provider.displayName) on this Mac. If you also want the vendor session revoked, sign out inside the tool first.")
         }
     }
 
@@ -62,7 +62,7 @@ import SwitcherCore
             Label("ACTIVE", systemImage: "checkmark.circle.fill")
                 .font(.caption.weight(.bold)).foregroundStyle(.white)
                 .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(Color.green))
-                .help("New `\(account.provider.executableName)` launches use this account (verified signed in).")
+                .help("New \(account.provider.executableName) launches use this account (verified signed in).")
         case .selectedUnverified:
             Label("SELECTED", systemImage: "clock").font(.caption.weight(.bold)).foregroundStyle(.secondary)
                 .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(Color.secondary.opacity(0.2)))
@@ -70,7 +70,7 @@ import SwitcherCore
         case .selectedNeedsLogin:
             Label("SELECTED · SIGN IN", systemImage: "exclamationmark.triangle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
                 .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(Color.orange))
-                .help("Selected, but not signed in: `\(account.provider.executableName)` will ask you to log in.")
+                .help("Selected, but not signed in: \(account.provider.executableName) will ask you to log in.")
         case .selectedWrapperInactive:
             Label("SELECTED · WRAPPER OFF", systemImage: "exclamationmark.triangle.fill").font(.caption.weight(.bold)).foregroundStyle(.white)
                 .padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(Color.orange))
@@ -83,7 +83,7 @@ import SwitcherCore
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.isBusy(account))
-            .help("Make this the account that new `\(account.provider.executableName)` commands use.")
+            .help("Make this the account that new \(account.provider.executableName) commands use.")
         }
     }
 
@@ -199,9 +199,19 @@ import SwitcherCore
                 }
             }
             Spacer()
+            if case .paused = state.status {
+                Button {
+                    Task { await model.refreshCredential(account) }
+                } label: {
+                    if model.isBusy(account) { ProgressView().controlSize(.small) } else { Label("Refresh now", systemImage: "arrow.triangle.2.circlepath") }
+                }
+                .controlSize(.small)
+                .disabled(model.isBusy(account))
+                .help("Asks the tool to renew this account's token and fetches the usage again.")
+            }
             Button { model.openTerminal(account) } label: { Label("Open Terminal", systemImage: "terminal") }
                 .controlSize(.small)
-                .help("Opens a terminal whose `\(account.provider.executableName)` uses this account, without changing the global selection.")
+                .help("Opens a terminal whose \(account.provider.executableName) uses this account, without changing the global selection.")
             Menu {
                 Group {
                     Button("Verify sign-in") { Task { await model.verify(account) } }
@@ -242,6 +252,7 @@ import SwitcherCore
         case .stale(let at, _): return "Stale · as of \(UsageFormat.age(at, now: model.now))"
         case .rateLimited(let until): return "Rate limited · retry \(UsageFormat.age(until, now: model.now).replacingOccurrences(of: " ago", with: ""))"
         case .offline(let last): return "Offline" + (last.map { " · last \(UsageFormat.age($0, now: model.now))" } ?? "")
+        case .paused(let at, _): return "Usage paused" + (at.map { " · last reading \(UsageFormat.age($0, now: model.now))" } ?? "")
         default: return state.status.shortLabel
         }
     }

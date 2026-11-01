@@ -58,7 +58,7 @@ struct SessionsSheet: View {
                 Button("Find & resume") { resumeById() }.disabled(resumeId.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let message { Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-            Text("Resume opens a Terminal bound to the chosen account in the conversation's original folder and runs `\(account.provider.executableName) \(account.provider == .claude ? "--resume" : "resume") <id>`. Duplicating copies only that one transcript; the resumed chat runs with the target profile's settings and tools, and re-sending the context uses that account's quota.")
+            Text("Resume opens a Terminal bound to the chosen account in the conversation's original folder and resumes the conversation there. Duplicating copies only that one transcript; the resumed chat runs with the target profile's settings and tools, and re-sending the context uses that account's quota.")
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)

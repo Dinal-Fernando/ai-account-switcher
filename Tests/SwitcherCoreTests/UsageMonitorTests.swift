@@ -95,6 +95,30 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertTrue(headlines.isEmpty)
     }
 
+    func testLapsedTokenPausesButKeepsTheLastReading() async {
+        let env = TempEnvironment()
+        let ctx = makeContext(env)
+        let cache = UsageCache(paths: env.paths)
+        let a = Account(id: "a", provider: .claude, name: "A", kind: .managed)
+        let old = sampleSnapshot(id: "a", five: 40, weekly: 10, at: Date(timeIntervalSince1970: (Date().timeIntervalSince1970 - 7200).rounded(.down)))
+        cache.saveSnapshot(old)
+        let clock = FixedTimeSource()
+        let claude = StubAdapter(provider: .claude, context: ctx) { _ in throw UsageFetchError.credentialExpired("lapsed") }
+        let monitor = UsageMonitor(adapters: [.claude: claude], cache: cache, time: clock)
+        await monitor.load(accounts: [a])
+        let s = await monitor.refresh(a, force: true)
+        if case .paused(let at, let reason) = s.status {
+            XCTAssertEqual(at, old.fetchedAt)
+            XCTAssertEqual(reason, "lapsed")
+        } else { XCTFail("expected paused, got \(s.status)") }
+        XCTAssertEqual(s.snapshot?.fiveHour?.usedPercent, 40, "last reading is kept")
+        XCTAssertEqual(s.status.shortLabel, "Usage paused")
+        XCTAssertTrue(s.status.isProblem)
+        let wait = s.backoff.notBefore!.timeIntervalSince(clock.now)
+        XCTAssertGreaterThanOrEqual(wait, 300)
+        XCTAssertLessThanOrEqual(wait, 360, "short, fixed re-check interval for lapsed tokens")
+    }
+
     func testHistoryAppendsWithSpacing() {
         let env = TempEnvironment()
         let cache = UsageCache(paths: env.paths)
