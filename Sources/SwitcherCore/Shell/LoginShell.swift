@@ -16,20 +16,41 @@ public struct LoginShell: Sendable {
         return ["zsh", "bash", "sh", "fish"].contains(name)
     }
 
-    /// Runs `command -v <name>` in a login+interactive shell and returns the last non-empty line.
+    public var shellName: String { (shellPath as NSString).lastPathComponent }
+
+    /// Runs a snippet in a login + interactive shell (the configuration Terminal windows get).
+    func run(_ snippet: String, timeout: TimeInterval) -> ProcessResult? {
+        try? runner.run(shellPath, arguments: ["-l", "-i", "-c", snippet], environment: nil, currentDirectory: nil, input: nil, timeout: timeout)
+    }
+
+    /// The executable the login shell would run for `command`, ignoring aliases and functions
+    /// (`whence -p` in zsh, `type -P` in bash); the last absolute path printed wins, so rc-file chatter is ignored.
     public func resolve(_ command: String, timeout: TimeInterval = 15) -> String? {
-        let result = try? runner.run(shellPath, arguments: ["-lic", "command -v \(command)"], environment: nil,
-                                     currentDirectory: nil, input: nil, timeout: timeout)
-        guard let result, result.exitCode == 0 else { return nil }
-        return result.stdout.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
+        let snippet: String
+        switch shellName {
+        case "zsh": snippet = "whence -p \(command) 2>/dev/null || command -v \(command)"
+        case "bash": snippet = "type -P \(command) 2>/dev/null || command -v \(command)"
+        case "fish": snippet = "command -s \(command)"
+        default: snippet = "command -v \(command)"
+        }
+        guard let result = run(snippet, timeout: timeout), result.exitCode == 0 else { return nil }
+        return Self.lastAbsolutePath(in: result.stdout)
+    }
+
+    static func lastAbsolutePath(in text: String) -> String? {
+        text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.last { $0.hasPrefix("/") }
+    }
+
+    /// PATH entries of the login shell, in order.
+    public func pathEntries(timeout: TimeInterval = 15) -> [String] {
+        guard let result = run("printf '%s\\n' \"$PATH\"", timeout: timeout), result.exitCode == 0 else { return [] }
+        guard let line = result.stdout.split(separator: "\n").map({ $0.trimmingCharacters(in: .whitespaces) }).last(where: { $0.contains("/") }) else { return [] }
+        return line.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
     }
 
     /// Environment of a login+interactive shell (what Terminal windows see). Parsed from `env` output.
     public func environment(timeout: TimeInterval = 15) -> [String: String] {
-        guard let result = try? runner.run(shellPath, arguments: ["-lic", "env"], environment: nil,
-                                           currentDirectory: nil, input: nil, timeout: timeout), result.exitCode == 0 else {
-            return [:]
-        }
+        guard let result = run("env", timeout: timeout), result.exitCode == 0 else { return [:] }
         return Self.parseEnv(result.stdout)
     }
 

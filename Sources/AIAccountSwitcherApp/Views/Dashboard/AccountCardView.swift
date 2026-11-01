@@ -136,10 +136,10 @@ import SwitcherCore
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     UsageRingView(percent: snap.fiveHour?.usedPercent, label: "5-hour",
-                                  sublabel: snap.fiveHour.map { UsageFormat.countdown($0, now: model.now) },
+                                  sublabel: snap.fiveHour.map { UsageFormat.countdown($0, now: model.now) } ?? (snap.weekly != nil ? "no usage yet" : nil),
                                   showRemaining: model.settings.showRemaining)
                     UsageRingView(percent: snap.weekly?.usedPercent, label: "Weekly",
-                                  sublabel: snap.weekly.map { UsageFormat.countdown($0, now: model.now) },
+                                  sublabel: snap.weekly.map { UsageFormat.countdown($0, now: model.now) } ?? (snap.fiveHour != nil ? "no usage yet" : nil),
                                   showRemaining: model.settings.showRemaining)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(snap.modelWindows) { w in
@@ -151,7 +151,7 @@ import SwitcherCore
                         }
                         if let credits = snap.credits {
                             HStack {
-                                Text("Credits").font(.caption)
+                                Text("Credit balance").font(.caption).help("As reported by the service for this plan")
                                 Spacer()
                                 Text(credits.unlimited ? "unlimited" : (credits.balance.map { String(format: "%.2f", $0) } ?? (credits.hasCredits ? "available" : "none")))
                                     .font(.caption).monospacedDigit()

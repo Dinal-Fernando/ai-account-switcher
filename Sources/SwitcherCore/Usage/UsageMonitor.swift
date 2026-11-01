@@ -10,14 +10,28 @@ public struct AccountUsageState: Equatable, Sendable {
 
     public init() {}
 
-    /// Whichever reading is newest.
+    /// The polled reading with newer live (status-line) values layered on top: the beacon only reports the
+    /// 5-hour and weekly windows, so per-model bars, extra usage and plan stay from the polled snapshot.
+    /// A window the beacon omits is treated as "not active" only when the polled window's reset time has passed.
     public var effectiveSnapshot: UsageSnapshot? {
         switch (snapshot, beacon) {
-        case (let a?, let b?): return a.fetchedAt >= b.fetchedAt ? a : b
-        case (let a?, nil): return a
-        case (nil, let b?): return b
+        case (let polled?, let live?) where live.fetchedAt > polled.fetchedAt:
+            return Self.merge(polled: polled, live: live)
+        case (let polled?, _): return polled
+        case (nil, let live?): return live
         default: return nil
         }
+    }
+
+    static func merge(polled: UsageSnapshot, live: UsageSnapshot) -> UsageSnapshot {
+        var merged = polled
+        if let f = live.fiveHour { merged.fiveHour = f }
+        else if let pf = polled.fiveHour, let r = pf.resetsAt, r < live.fetchedAt { merged.fiveHour = nil }
+        if let w = live.weekly { merged.weekly = w }
+        else if let pw = polled.weekly, let r = pw.resetsAt, r < live.fetchedAt { merged.weekly = nil }
+        merged.fetchedAt = live.fetchedAt
+        merged.source = live.source
+        return merged
     }
 }
 

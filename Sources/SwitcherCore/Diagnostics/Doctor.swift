@@ -99,14 +99,11 @@ public struct Doctor: Sendable {
                 items.append(DoctorItem(id: "\(p)-real", level: .failure, title: "No \(provider.executableName) executable found", detail: "Install \(provider.displayName) first."))
             }
             if probeShell {
-                if let resolved = shellStatus.loginShellResolution[provider] {
-                    let viaWrapper = resolved == wrapperPath
-                    items.append(DoctorItem(id: "\(p)-path", level: viaWrapper ? .ok : (shellStatus.wrapperInstalled[provider] == true ? .failure : .info),
-                                            title: "Login shell resolves \(provider.executableName) to \(resolved)",
-                                            detail: viaWrapper ? "Switching is in effect for new terminals." : "Not the wrapper: check that the aiswitch PATH block in ~/.zshrc comes after anything else that edits PATH, then open a new terminal."))
-                } else {
-                    items.append(DoctorItem(id: "\(p)-path", level: .warning, title: "Login shell could not resolve \(provider.executableName)", detail: "Open a new terminal and run command -v \(provider.executableName)."))
-                }
+                let active = shellStatus.isActive(provider, paths: paths)
+                let resolved = shellStatus.loginShellResolution[provider] ?? "(nothing)"
+                items.append(DoctorItem(id: "\(p)-path", level: active ? .ok : (shellStatus.wrapperInstalled[provider] == true ? .failure : .info),
+                                        title: "Login shell resolves \(provider.executableName) to \(resolved)",
+                                        detail: shellStatus.detail(provider, paths: paths) + (shellStatus.loginShellPATH.isEmpty ? "" : " PATH: \(shellStatus.loginShellPATH.joined(separator: ":"))")))
                 let overrides = EnvOverrideDetector.findings(provider: provider, environment: loginEnv)
                 for f in overrides { items.append(DoctorItem(id: f.id, level: .warning, title: f.message, detail: "Unset it (or use AISWITCH_NO_ENV_WARN=1 to silence the wrapper) if you want the selected subscription login.")) }
             }

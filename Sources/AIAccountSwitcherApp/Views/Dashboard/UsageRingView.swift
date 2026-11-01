@@ -28,7 +28,7 @@ struct UsageRingView: View {
                     Text(percent == nil ? "—" : "\(Int(displayed.rounded()))%")
                         .font(.system(size: size * 0.26, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                    Text(showRemaining ? "left" : "used")
+                    Text(percent == nil ? "none" : (showRemaining ? "left" : "used"))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }

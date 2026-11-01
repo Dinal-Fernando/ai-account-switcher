@@ -119,6 +119,34 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertLessThanOrEqual(wait, 360, "short, fixed re-check interval for lapsed tokens")
     }
 
+    func testLiveBeaconMergesOntoPolledSnapshot() {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var polled = sampleSnapshot(id: "a", five: 40, weekly: 10, at: t0, resets: t0.addingTimeInterval(3600))
+        polled.modelWindows = [UsageWindow(kind: .modelWeekly, label: "Fable weekly", usedPercent: 2)]
+        polled.plan = "max"
+        let live = UsageSnapshot(provider: .claude, accountId: "a", fetchedAt: t0.addingTimeInterval(60),
+                                 weekly: UsageWindow(kind: .weekly, label: "Weekly", usedPercent: 11, resetsAt: t0.addingTimeInterval(86_400)), source: "statusline-beacon")
+        var state = AccountUsageState()
+        state.snapshot = polled
+        state.beacon = live
+        let merged = state.effectiveSnapshot!
+        XCTAssertEqual(merged.weekly?.usedPercent, 11, "live value wins")
+        XCTAssertEqual(merged.fiveHour?.usedPercent, 40, "window the beacon omitted but still running is kept")
+        XCTAssertEqual(merged.modelWindows.first?.label, "Fable weekly", "per-model bars survive")
+        XCTAssertEqual(merged.plan, "max")
+        XCTAssertEqual(merged.source, "statusline-beacon")
+        XCTAssertEqual(merged.fetchedAt, live.fetchedAt)
+        // an omitted window whose polled reset already passed is dropped
+        var expired = polled
+        expired.fiveHour?.resetsAt = t0.addingTimeInterval(30)
+        state.snapshot = expired
+        XCTAssertNil(state.effectiveSnapshot?.fiveHour)
+        // older beacon never overrides a newer poll
+        state.snapshot = sampleSnapshot(id: "a", five: 50, weekly: 20, at: t0.addingTimeInterval(120))
+        XCTAssertEqual(state.effectiveSnapshot?.weekly?.usedPercent, 20)
+        XCTAssertEqual(state.effectiveSnapshot?.source, "test")
+    }
+
     func testReloadBeaconsPicksUpStatusLineReadingWithoutNetwork() async throws {
         let env = TempEnvironment()
         let ctx = makeContext(env)

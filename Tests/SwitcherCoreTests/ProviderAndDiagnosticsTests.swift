@@ -174,6 +174,16 @@ final class ProviderAndDiagnosticsTests: XCTestCase {
         XCTAssertTrue(report2.items.contains { $0.id == "claude-dryrun" && $0.title.contains("profile=default") })
     }
 
+    func testProcessRunnerReturnsWhenAGrandchildKeepsThePipeOpen() throws {
+        // `sleep` inherits stdout and outlives the shell; the runner must still return promptly with the output it got.
+        let start = Date()
+        let r = try ProcessRunner().run("/bin/sh", arguments: ["-c", "sleep 8 & echo hi"], environment: nil, currentDirectory: nil, input: nil, timeout: 20)
+        XCTAssertEqual(r.exitCode, 0)
+        XCTAssertFalse(r.timedOut)
+        XCTAssertEqual(r.stdout, "hi\n")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 7, "must not wait for the background grandchild")
+    }
+
     func testProcessRunnerTimeoutAndOutput() throws {
         let r = try ProcessRunner().run("/bin/sh", arguments: ["-c", "echo out; echo err 1>&2; exit 3"], environment: nil, currentDirectory: nil, input: nil, timeout: 5)
         XCTAssertEqual(r.exitCode, 3)

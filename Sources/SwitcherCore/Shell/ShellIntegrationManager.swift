@@ -8,16 +8,64 @@ public struct ShellIntegrationStatus: Equatable, Sendable {
     public var rcFilesWithBlock: [String] = []
     /// Filled by `verify(...)`: what a fresh login shell resolves `claude` / `codex` to.
     public var loginShellResolution: [Provider: String] = [:]
+    /// Filled by `verify(...)`: the login shell's PATH entries, in order.
+    public var loginShellPATH: [String] = []
+    public var loginShellName: String?
     public var loginShellProbed = false
 
     public init() {}
 
     public func wrapperPath(_ provider: Provider, paths: SwitcherPaths) -> String { paths.wrapper(provider).path }
 
-    /// True when the wrapper exists *and* a login shell actually picks it up.
+    static func canonical(_ path: String, home: URL) -> String {
+        var p = path
+        if p == "~" || p.hasPrefix("~/") { p = home.path + p.dropFirst() }
+        return URL(fileURLWithPath: p).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// Index of our bin dir in the login-shell PATH, and of the directory holding the real executable.
+    func pathOrder(_ provider: Provider, paths: SwitcherPaths) -> (bin: Int?, real: Int?) {
+        let entries = loginShellPATH.map { Self.canonical($0, home: paths.home) }
+        let bin = entries.firstIndex(of: Self.canonical(paths.bin.path, home: paths.home))
+        var real: Int?
+        if let exe = realExecutable[provider] {
+            real = entries.firstIndex(of: Self.canonical((exe as NSString).deletingLastPathComponent, home: paths.home))
+        }
+        return (bin, real)
+    }
+
+    /// True when the wrapper exists *and* a login shell actually picks it up: either the shell resolves the
+    /// command to the wrapper, or our bin dir precedes the real executable's directory in the shell's PATH.
     public func isActive(_ provider: Provider, paths: SwitcherPaths) -> Bool {
         guard wrapperInstalled[provider] == true, loginShellProbed else { return false }
-        return loginShellResolution[provider] == paths.wrapper(provider).path
+        let wrapper = Self.canonical(paths.wrapper(provider).path, home: paths.home)
+        if let r = loginShellResolution[provider], Self.canonical(r, home: paths.home) == wrapper { return true }
+        let order = pathOrder(provider, paths: paths)
+        if let bin = order.bin {
+            if let real = order.real { return bin < real }
+            return true
+        }
+        return false
+    }
+
+    /// One sentence explaining the probe result, for banners and diagnostics.
+    public func detail(_ provider: Provider, paths: SwitcherPaths) -> String {
+        guard loginShellProbed else { return "Login shell not checked yet." }
+        let shell = loginShellName ?? "shell"
+        let resolved = loginShellResolution[provider] ?? "nothing"
+        if isActive(provider, paths: paths) {
+            return "Your login \(shell) runs \(provider.executableName) from \(resolved); switching is in effect for new terminals."
+        }
+        var s = "Your login \(shell) runs \(provider.executableName) from \(resolved), not from \(paths.wrapper(provider).path)."
+        let order = pathOrder(provider, paths: paths)
+        if loginShellPATH.isEmpty {
+            s += " The shell's PATH could not be read (slow or interactive rc file?)."
+        } else if order.bin == nil {
+            s += " \(paths.bin.path) is not on that PATH: the block in your rc file is missing or is overwritten by a later PATH assignment."
+        } else if let real = order.real, let bin = order.bin, real < bin {
+            s += " \(paths.bin.path) is on the PATH but after the real executable's directory; move the aiswitch block to the end of your rc file."
+        }
+        return s
     }
 }
 
@@ -232,6 +280,8 @@ public final class ShellIntegrationManager: @unchecked Sendable {
         for provider in Provider.allCases {
             if let r = login.resolve(provider.executableName) { s.loginShellResolution[provider] = r }
         }
+        s.loginShellPATH = login.pathEntries()
+        s.loginShellName = login.shellName
         s.loginShellProbed = true
         return s
     }

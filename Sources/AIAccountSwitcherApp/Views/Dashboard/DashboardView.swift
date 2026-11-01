@@ -45,10 +45,16 @@ import SwitcherCore
     @ViewBuilder private var banners: some View {
         @Bindable var model = model
         if model.shellStatus.loginShellProbed && !model.shellIntegrationActive {
+            let wrappersPresent = Provider.allCases.allSatisfy { model.shellStatus.wrapperInstalled[$0] == true }
+            let details = Provider.allCases.filter { !model.shellIntegrationActive($0) }.map { model.shellStatus.detail($0, paths: model.runtime.paths) }.joined(separator: " ")
             Banner(style: .warning, icon: "terminal",
-                   title: "Shell integration is not active",
-                   message: "Terminal still runs the plain claude/codex, so Set Active has no effect on new commands yet. Install it (reversible, backs up ~/.zshrc).",
-                   actionTitle: "Install shell integration") { Task { await model.installShellIntegration(addPathBlock: true) } }
+                   title: wrappersPresent ? "Shell integration may not be in effect" : "Shell integration is not installed",
+                   message: wrappersPresent
+                       ? "\(details) If a new terminal does run the wrapper (aiswitch which claude shows applied=yes), this is a probe glitch: click Re-check."
+                       : "Terminal still runs the plain claude/codex, so Set Active has no effect on new commands yet. Install it (reversible, backs up ~/.zshrc).",
+                   actionTitle: wrappersPresent ? "Re-check" : "Install shell integration") {
+                Task { if wrappersPresent { await model.probeShell() } else { await model.installShellIntegration(addPathBlock: true) } }
+            }
         }
         if let msg = model.errorMessage {
             Banner(style: .error, icon: "xmark.octagon", title: "Something went wrong", message: msg, actionTitle: "Dismiss") { model.errorMessage = nil }
@@ -94,6 +100,7 @@ struct ProviderSection: View {
                 Spacer()
                 Text(model.shellIntegrationActive(provider) ? "wrapper active" : (model.shellStatus.loginShellProbed ? "wrapper inactive" : "checking shell…"))
                     .font(.caption).foregroundStyle(model.shellIntegrationActive(provider) ? .green : .orange)
+                    .help(model.shellStatus.detail(provider, paths: model.runtime.paths))
                 Button(action: addAccount) { Label("Add", systemImage: "plus") }.controlSize(.small)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 600), spacing: 16, alignment: .top)], alignment: .leading, spacing: 16) {

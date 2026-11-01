@@ -128,6 +128,52 @@ final class ShellIntegrationTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: env.paths.wrapper(.claude), encoding: .utf8), EmbeddedScripts.wrapper + "\n")
     }
 
+    func testLoginShellResolveIgnoresAliasesAndRcChatter() {
+        let runner = FakeProcessRunner()
+        runner.script("zsh -l -i -c whence -p claude 2>/dev/null || command -v claude",
+                      ProcessResult(exitCode: 0, stdout: "Welcome banner from .zshrc\nclaude: aliased to claude --verbose\n/Users/jane/.aiswitch/bin/claude\n", stderr: ""))
+        runner.script("zsh -l -i -c printf '%s\\n' \"$PATH\"", ProcessResult(exitCode: 0, stdout: "banner\n/Users/jane/.aiswitch/bin:/opt/homebrew/bin:/usr/bin\n", stderr: ""))
+        XCTAssertEqual(LoginShell.lastAbsolutePath(in: "x\nclaude: aliased to y\n/a/b\n"), "/a/b")
+        XCTAssertNil(LoginShell.lastAbsolutePath(in: "nothing here"))
+        // A shell whose basename is "zsh" selects the zsh snippet: fake the executable in a temp dir.
+        let env = TempEnvironment()
+        let fakeZsh = env.makeFakeExecutable("zsh")
+        let login = LoginShell(shellPath: fakeZsh, environment: [:], runner: runner)
+        XCTAssertEqual(login.shellName, "zsh")
+        XCTAssertEqual(login.resolve("claude"), "/Users/jane/.aiswitch/bin/claude")
+        XCTAssertEqual(login.pathEntries(), ["/Users/jane/.aiswitch/bin", "/opt/homebrew/bin", "/usr/bin"])
+    }
+
+    func testIsActiveUsesResolutionOrPathOrder() {
+        let env = TempEnvironment()
+        var s = ShellIntegrationStatus()
+        s.wrapperInstalled[.claude] = true
+        s.realExecutable[.claude] = "/opt/homebrew/bin/claude"
+        s.loginShellProbed = true
+        // exact resolution to the wrapper
+        s.loginShellResolution[.claude] = env.paths.wrapper(.claude).path
+        XCTAssertTrue(s.isActive(.claude, paths: env.paths))
+        // resolution points elsewhere (alias/function quirk) but PATH order puts our bin first → still active
+        s.loginShellResolution[.claude] = "/opt/homebrew/bin/claude"
+        s.loginShellPATH = [env.paths.bin.path, "/opt/homebrew/bin", "/usr/bin"]
+        XCTAssertTrue(s.isActive(.claude, paths: env.paths))
+        XCTAssertTrue(s.detail(.claude, paths: env.paths).contains("switching is in effect"))
+        // our bin after the real dir → inactive, with an actionable explanation
+        s.loginShellPATH = ["/opt/homebrew/bin", env.paths.bin.path]
+        XCTAssertFalse(s.isActive(.claude, paths: env.paths))
+        XCTAssertTrue(s.detail(.claude, paths: env.paths).contains("after the real executable"))
+        // bin dir missing from PATH
+        s.loginShellPATH = ["/opt/homebrew/bin", "/usr/bin"]
+        XCTAssertFalse(s.isActive(.claude, paths: env.paths))
+        XCTAssertTrue(s.detail(.claude, paths: env.paths).contains("not on that PATH"))
+        // tilde entries are expanded
+        s.loginShellPATH = ["~/" + env.paths.bin.path.dropFirst(env.home.path.count + 1), "/opt/homebrew/bin"]
+        XCTAssertTrue(s.isActive(.claude, paths: env.paths))
+        // wrapper not installed → never active
+        s.wrapperInstalled[.claude] = false
+        XCTAssertFalse(s.isActive(.claude, paths: env.paths))
+    }
+
     func testLoginShellEnvParsing() {
         let env = LoginShell.parseEnv("PATH=/a:/b\nFOO=bar=baz\nMULTI=line1\nline2\n_X=1\n9bad=no\n")
         XCTAssertEqual(env["PATH"], "/a:/b")

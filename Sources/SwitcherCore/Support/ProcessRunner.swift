@@ -57,8 +57,15 @@ public extension ProcessRunning {
 }
 
 private final class DataBox: @unchecked Sendable {
-    var data = Data()
-    var flag = false
+    private let lock = NSLock()
+    private var buffer = Data()
+    private var _flag = false
+    func append(_ d: Data) { lock.lock(); buffer.append(d); lock.unlock() }
+    var data: Data { lock.lock(); defer { lock.unlock() }; return buffer }
+    var flag: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _flag }
+        set { lock.lock(); _flag = newValue; lock.unlock() }
+    }
 }
 
 /// Foundation.Process based runner with a hard timeout (SIGTERM, then SIGKILL after 2 s).
@@ -92,16 +99,18 @@ public struct ProcessRunner: ProcessRunning {
         }
 
         let out = DataBox(), err = DataBox(), timedOut = DataBox()
-        let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global(qos: .userInitiated).async {
-            out.data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            group.leave()
+        // Accumulate output as it arrives; EOF (empty availableData) ends each stream. A grandchild that keeps the
+        // pipe open (background job started by an rc file) delays EOF, so the wait below is capped and partial
+        // output is used rather than blocking forever or closing a handle another thread is reading.
+        let eof = DispatchGroup()
+        eof.enter(); eof.enter()
+        outPipe.fileHandleForReading.readabilityHandler = { fh in
+            let d = fh.availableData
+            if d.isEmpty { fh.readabilityHandler = nil; eof.leave() } else { out.append(d) }
         }
-        group.enter()
-        DispatchQueue.global(qos: .userInitiated).async {
-            err.data = errPipe.fileHandleForReading.readDataToEndOfFile()
-            group.leave()
+        errPipe.fileHandleForReading.readabilityHandler = { fh in
+            let d = fh.availableData
+            if d.isEmpty { fh.readabilityHandler = nil; eof.leave() } else { err.append(d) }
         }
         let pid = process.processIdentifier
         let killer = DispatchWorkItem {
@@ -116,12 +125,9 @@ public struct ProcessRunner: ProcessRunning {
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
         process.waitUntilExit()
         killer.cancel()
-        // Pipes normally hit EOF the moment the child exits. A grandchild that inherited them (a login shell
-        // spawning background jobs, a CLI forking a daemon) could keep them open; cap the wait so a status
-        // check can never hang the caller. Any output still arriving after the cap is dropped.
-        if group.wait(timeout: .now() + 5) == .timedOut {
-            try? outPipe.fileHandleForReading.close()
-            try? errPipe.fileHandleForReading.close()
+        if eof.wait(timeout: .now() + 3) == .timedOut {
+            outPipe.fileHandleForReading.readabilityHandler = nil
+            errPipe.fileHandleForReading.readabilityHandler = nil
         }
         return ProcessResult(exitCode: process.terminationStatus,
                              stdout: String(decoding: out.data, as: UTF8.self),
@@ -155,7 +161,8 @@ public final class FakeProcessRunner: ProcessRunning, @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         calls.append(Call(executable: executable, arguments: arguments, environment: environment))
         let base = (executable as NSString).lastPathComponent
-        let keys = [base + " " + arguments.prefix(2).joined(separator: " "),
+        let keys = [base + " " + arguments.joined(separator: " "),
+                    base + " " + arguments.prefix(2).joined(separator: " "),
                     base + " " + (arguments.first ?? ""), base]
         for k in keys { if let r = scripted[k] { return r } }
         return defaultResult

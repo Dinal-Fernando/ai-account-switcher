@@ -4,6 +4,12 @@ Run `aiswitch doctor` (or Settings → Diagnostics) first. It prints, per CLI: w
 executable, what a fresh login shell resolves `claude`/`codex` to, the selected profile, a wrapper dry-run,
 environment overrides, the expected Keychain item, CLI version, compatibility warnings and a live sign-in check.
 
+## Banner says shell integration “may not be in effect” although switching works
+The app asks a fresh login shell where `claude` comes from (path-only lookup, ignoring aliases) and reads its
+PATH; the banner now quotes what it found. If `aiswitch which claude` in a new terminal prints `applied=yes`,
+switching works and the probe was wrong: click **Re-check**. Causes: an rc file that is slow or prints a lot,
+a shell other than zsh/bash, or `SHELL` pointing at a shell whose rc files differ from your terminal's.
+
 ## “Set Active” does nothing in Terminal
 * Diagnostics says *Login shell resolves `claude` to /opt/homebrew/bin/claude* → the PATH block is not in
   effect. Open a **new** terminal; if it persists, something later in `~/.zshrc` (or `~/.zprofile`,
