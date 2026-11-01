@@ -24,6 +24,8 @@ struct AISwitchCLI {
                                               copy one transcript into another account's profile
       aiswitch resume <claude|codex> <name|id> <session-id>
                                               resume a conversation under that account, here in this terminal
+      aiswitch beacon claude <name|id> on|off|status
+                                              live usage from Claude Code's status line for that account
       aiswitch rename <claude|codex> <name|id> <new name>
       aiswitch remove <claude|codex> <name|id> [--delete-dir]
       aiswitch doctor [--quick]               diagnostics (quick = no shell/auth probing)
@@ -42,7 +44,7 @@ struct AISwitchCLI {
         let flags = Set(args.filter { $0.hasPrefix("--") })
         let positional = args.filter { !$0.hasPrefix("--") }
         let quick = flags.contains("--quick")
-        let needsShell = !["version", "list", "use", "which", "add", "rename", "remove", "install-shell", "uninstall-shell", "sessions", "copy-session"].contains(command) && !quick
+        let needsShell = !["version", "list", "use", "which", "add", "rename", "remove", "install-shell", "uninstall-shell", "sessions", "copy-session", "beacon"].contains(command) && !quick
         let runtime = SwitcherRuntime(captureLoginShell: needsShell)
         do {
             switch command {
@@ -59,6 +61,7 @@ struct AISwitchCLI {
             case "sessions": try sessionsCommand(runtime, positional)
             case "copy-session": try copySession(runtime, positional, overwrite: flags.contains("--overwrite"))
             case "resume": try resumeCommand(runtime, positional)
+            case "beacon": try beaconCommand(runtime, positional)
             case "rename": try rename(runtime, positional)
             case "remove": try remove(runtime, positional, deleteDir: flags.contains("--delete-dir"))
             case "doctor": await doctor(runtime, quick: quick)
@@ -287,6 +290,30 @@ struct AISwitchCLI {
         try process.run()
         process.waitUntilExit()
         exit(process.terminationStatus)
+    }
+
+    static func beaconCommand(_ runtime: SwitcherRuntime, _ positional: [String]) throws {
+        let a = try account(runtime, positional)
+        guard a.provider == .claude else { throw CLIError("the status-line beacon is a Claude Code feature") }
+        let action = positional.count > 2 ? positional[2] : "status"
+        switch action {
+        case "on":
+            if !FileManager.default.isExecutableFile(atPath: runtime.paths.statusLineBeacon.path) {
+                try AtomicFile.write(EmbeddedScripts.statusLine + "\n", to: runtime.paths.statusLineBeacon, permissions: 0o755)
+            }
+            try runtime.profiles.installStatusLineBeacon(for: a)
+            var updated = a; updated.statusLineBeacon = true; try runtime.accounts.update(updated)
+            print("live usage on for '\(a.name)' (\(runtime.profiles.claudeSettingsFile(for: a).path))")
+        case "off":
+            try runtime.profiles.removeStatusLineBeacon(for: a)
+            var updated = a; updated.statusLineBeacon = false; try runtime.accounts.update(updated)
+            print("live usage off for '\(a.name)'")
+        default:
+            let on = runtime.profiles.statusLineBeaconInstalled(for: a)
+            print("'\(a.name)': live usage \(on ? "on" : "off")")
+            if let chained = AtomicFile.readLine(runtime.paths.statusLineChainFile(profileId: a.id)) { print("chained status line: \(chained)") }
+            print("beacon file: \(runtime.paths.statusLineBeaconFile(profileId: a.id).path)")
+        }
     }
 
     static func rename(_ runtime: SwitcherRuntime, _ positional: [String]) throws {

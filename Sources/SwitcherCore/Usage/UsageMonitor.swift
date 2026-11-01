@@ -59,6 +59,16 @@ public actor UsageMonitor {
         }
     }
 
+    /// Re-reads the status-line beacon files only (no network). The app calls this from a file watcher so a
+    /// card updates within a second of Claude Code reporting new numbers.
+    public func reloadBeacons(_ accounts: [Account]) {
+        for account in accounts where account.provider == .claude {
+            var s = states[account.key] ?? AccountUsageState()
+            refreshBeacon(account, into: &s)
+            states[account.key] = s
+        }
+    }
+
     public func remove(_ key: AccountKey) {
         states.removeValue(forKey: key)
         cache.removeSnapshot(key)

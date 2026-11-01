@@ -70,6 +70,10 @@ name expected for each profile so you can check Keychain Access yourself.
   menu; threshold alerts carry a **Switch account** action that changes the CLI selection.
 * Phase 4 – Opt-in automatic switching when the active account is exhausted; Claude status-line *beacon*
   (supported data source: values Claude Code itself reports) as a complement to the undocumented endpoints.
+* **Live numbers (optional)**: a Claude card's menu has *Live usage from status line*. It points that profile's
+  status line at the bundled beacon script (any existing status line keeps working behind it); Claude Code then
+  reports its own quota numbers after every response and the card updates within a second, marked LIVE. This is
+  a documented Claude Code mechanism, Pro/Max only, and only while a session in that account is running.
 * **Continue a conversation under another account**: each card's *Sessions…* lists that account's stored
   conversations (local transcript files, readable even when the quota is exhausted). *Duplicate to <account>*
   copies the one transcript into the other profile and opens a Terminal there running `claude --resume <id>`

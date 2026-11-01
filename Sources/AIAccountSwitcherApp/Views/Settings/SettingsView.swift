@@ -85,6 +85,10 @@ struct RefreshSettingsView: View {
             }
             Text("Each account is refreshed independently; a failing account never blocks the others. Rate limits (HTTP 429) trigger exponential backoff from 1 to 30 minutes and honour Retry-After. Readings are cached and marked stale when they cannot be refreshed. The Anthropic usage endpoint is never polled faster than once per minute per account.")
                 .font(.caption).foregroundStyle(.secondary)
+            Section("Live numbers") {
+                Text("Polled numbers are minutes old by design. For a Claude account, turn on “Live usage from status line” in its card menu: the app then points that profile's status line at a tiny script that stores the numbers Claude Code itself reports, and the card updates within a second of each response while a session runs (Pro and Max plans). An existing status line keeps working; it is chained behind the beacon.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if let last = model.lastRefresh { Text("Last refresh: \(last.formatted(date: .omitted, time: .standard))").font(.caption) }
         }
         .formStyle(.grouped)

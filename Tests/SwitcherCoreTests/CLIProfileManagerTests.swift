@@ -71,6 +71,47 @@ final class CLIProfileManagerTests: XCTestCase {
         XCTAssertFalse(untouched.contains("cli_auth_credentials_store"))
     }
 
+    func testStatusLineBeaconInstallPreservesSettingsAndChainsPreviousCommand() throws {
+        let env = TempEnvironment()
+        let m = CLIProfileManager(paths: env.paths)
+        let dir = try m.createProfileDirectory(provider: .claude, id: "live-1", options: ProfileSeedOptions(copyClaudeUserSettings: false, copyCodexConfig: false))
+        let settings = dir.appendingPathComponent("settings.json")
+        try #"{"theme":"dark","statusLine":{"type":"command","command":"~/bin/mystatus.sh"}}"#.write(to: settings, atomically: true, encoding: .utf8)
+        let account = Account(id: "live-1", provider: .claude, name: "Live", kind: .managed)
+        XCTAssertFalse(m.statusLineBeaconInstalled(for: account))
+        try m.installStatusLineBeacon(for: account)
+        XCTAssertTrue(m.statusLineBeaconInstalled(for: account))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: settings)) as? [String: Any])
+        XCTAssertEqual(json["theme"] as? String, "dark", "other settings survive")
+        XCTAssertEqual((json["statusLine"] as? [String: Any])?["command"] as? String, m.beaconCommand())
+        XCTAssertEqual(AtomicFile.readLine(env.paths.statusLineChainFile(profileId: "live-1")), "~/bin/mystatus.sh", "previous command is chained")
+        try m.installStatusLineBeacon(for: account)
+        XCTAssertEqual(AtomicFile.readLine(env.paths.statusLineChainFile(profileId: "live-1")), "~/bin/mystatus.sh", "idempotent: the beacon itself never becomes the chained command")
+        try m.removeStatusLineBeacon(for: account)
+        let restored = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: settings)) as? [String: Any])
+        XCTAssertEqual((restored["statusLine"] as? [String: Any])?["command"] as? String, "~/bin/mystatus.sh")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: env.paths.statusLineChainFile(profileId: "live-1").path))
+        XCTAssertFalse(m.statusLineBeaconInstalled(for: account))
+        // no settings.json at all → created; no previous command → key removed on uninstall
+        try FileManager.default.removeItem(at: settings)
+        try m.installStatusLineBeacon(for: account)
+        XCTAssertTrue(m.statusLineBeaconInstalled(for: account))
+        try m.removeStatusLineBeacon(for: account)
+        let empty = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: settings)) as? [String: Any])
+        XCTAssertNil(empty["statusLine"])
+        // a settings.json that is not valid JSON is never overwritten
+        try "{ not json".write(to: settings, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try m.installStatusLineBeacon(for: account)) { XCTAssertEqual($0 as? ProfileError, .settingsUnreadable(settings.path)) }
+        XCTAssertEqual(try String(contentsOf: settings, encoding: .utf8), "{ not json")
+        // beacon command form and provider guard
+        XCTAssertEqual(m.beaconCommand(), env.paths.statusLineBeacon.path, "custom home → absolute path")
+        XCTAssertEqual(CLIProfileManager(paths: SwitcherPaths(home: env.home)).beaconCommand(), "~/.aiswitch/bin/aiswitch-statusline")
+        XCTAssertThrowsError(try m.installStatusLineBeacon(for: Account.makeDefault(provider: .codex)))
+        let (added, previous) = CLIProfileManager.settingsAddingBeacon(["statusLine": ["type": "command", "command": "/x/aiswitch-statusline"]], beacon: "~/.aiswitch/bin/aiswitch-statusline")
+        XCTAssertNil(previous)
+        XCTAssertEqual((added["statusLine"] as? [String: Any])?["command"] as? String, "~/.aiswitch/bin/aiswitch-statusline")
+    }
+
     func testRemoveProfileDirectory() throws {
         let env = TempEnvironment()
         let m = CLIProfileManager(paths: env.paths)

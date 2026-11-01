@@ -74,6 +74,15 @@ Settings → General → Menu bar: switch to *Compact* (`WK12 PER41 CX8`), turn 
 *Active accounts only*. Short labels are edited per account with Rename… (up to 4 characters). The label is
 rendered as an image so its threshold colors survive both light and dark menu bars.
 
+## Live usage does not appear / LIVE badge missing
+* The beacon only receives numbers from claude.ai Pro and Max logins, and only while a `claude` session in that
+  account is running and after its first response. Idle accounts fall back to the polled numbers.
+* Check the switch: `aiswitch beacon claude <account> status` prints whether the profile's settings.json points at
+  the beacon, the chained previous status line (if any), and the file the app watches
+  (`~/.aiswitch/usage/claude-<profile>.statusline.json`); its timestamp should move while you chat.
+* A settings.json that is not valid JSON is never modified; the toggle reports the problem instead.
+* Turning the toggle off restores your previous status line command exactly.
+
 ## Resume says the session was not found
 * Claude Code looks for `<id>.jsonl` under `projects/<folder-for-the-current-directory>/`. The app resumes in
   the conversation's original folder for that reason; if you moved or renamed the project, run

@@ -94,6 +94,16 @@ block; a backup exists in `~/.aiswitch/backups/`. Re-install from Settings and c
    (newer Codex versions index threads in a database), note it in TROUBLESHOOTING and use `codex resume`
    (picker) or `--last` in the target profile.
 
+### Step 15 – Live numbers
+1. Card `Claude A` → ⋯ → *Live usage from status line* (a check mark appears). `aiswitch beacon claude "Claude A"
+   status` prints "live usage on"; the profile's settings.json contains the beacon command; if a status line was
+   configured before, `~/.aiswitch/config/statusline-chain-<id>` holds it and it still renders inside `claude`.
+2. Run `claude` in that account and send one message. Expected: within about a second the card shows a green
+   **LIVE** pill with "Reported by Claude Code's status line just now" and the 5-hour/weekly numbers match the
+   `/usage` screen. The menu bar label updates at the same time.
+3. Toggle it off: the check mark disappears, settings.json has the previous status line back (or no statusLine
+   key if there was none), and the card returns to polled numbers at the next refresh.
+
 ### Extra checks
 * With `ANTHROPIC_API_KEY` exported, `claude` prints the wrapper warning naming the variable, and
   Diagnostics lists it as an override. `claude auth status` reports `authMethod: api_key`; the card shows the

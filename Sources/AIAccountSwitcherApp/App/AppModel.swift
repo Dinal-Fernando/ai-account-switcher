@@ -56,6 +56,7 @@ final class AppModel {
     let notifications = NotificationManager()
     private var sleepObserver: SleepWakeObserver?
     private var networkMonitor: NetworkMonitor?
+    private var usageWatcher: UsageDirectoryWatcher?
     private var refreshTask: Task<Void, Never>?
     private var ticker: Timer?
     private var started = false
@@ -95,6 +96,9 @@ final class AppModel {
             Task { @MainActor in await self?.setOnline(online) }
         }
         showOnboarding = !settings.onboardingCompleted
+        usageWatcher = UsageDirectoryWatcher(directory: runtime.paths.usage) { [weak self] in
+            Task { @MainActor in await self?.beaconsChanged() }
+        }
         Task { await self.bootstrap() }
     }
 
@@ -394,6 +398,40 @@ final class AppModel {
     }
 
     func history(_ account: Account) -> [UsageCache.HistoryPoint] { runtime.cache.history(account.key) }
+
+    // MARK: live beacon (Claude status line)
+
+    /// A beacon file changed on disk: re-read without any network call.
+    func beaconsChanged() async {
+        await runtime.monitor.reloadBeacons(accounts)
+        usage = await runtime.monitor.allStates()
+    }
+
+    func statusLineBeaconInstalled(_ account: Account) -> Bool {
+        runtime.profiles.statusLineBeaconInstalled(for: account)
+    }
+
+    /// Installs or removes the beacon in the account's settings.json (previous status line is preserved and chained).
+    func setStatusLineBeacon(_ account: Account, enabled: Bool) {
+        do {
+            if enabled {
+                if !FileManager.default.isExecutableFile(atPath: runtime.paths.statusLineBeacon.path) {
+                    try AtomicFile.write(EmbeddedScripts.statusLine + "\n", to: runtime.paths.statusLineBeacon, permissions: 0o755)
+                }
+                try runtime.profiles.installStatusLineBeacon(for: account)
+                infoMessage = "Live usage is on for '\(account.name)'. Numbers update the moment Claude Code reports them, while a session in that account is running (Pro and Max plans only)."
+            } else {
+                try runtime.profiles.removeStatusLineBeacon(for: account)
+                infoMessage = "Live usage is off for '\(account.name)'; its previous status line (if any) was restored."
+            }
+            var updated = account
+            updated.statusLineBeacon = enabled
+            try runtime.accounts.update(updated)
+            reloadAccounts()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 
     /// "Refresh now" on a paused card: ask the vendor CLI to renew the token, then fetch usage again.
     func refreshCredential(_ account: Account) async {

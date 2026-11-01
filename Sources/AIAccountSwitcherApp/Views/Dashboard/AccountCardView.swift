@@ -195,7 +195,13 @@ import SwitcherCore
                     Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                 }
                 if let snap = snapshot, snap.source == "statusline-beacon" {
-                    Text("Values observed by Claude Code (status-line beacon)").font(.caption2).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        if model.now.timeIntervalSince(snap.fetchedAt) < 120 {
+                            Text("LIVE").font(.caption2.weight(.bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.green))
+                        }
+                        Text("Reported by Claude Code's status line \(UsageFormat.age(snap.fetchedAt, now: model.now))").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
             }
             Spacer()
@@ -219,6 +225,13 @@ import SwitcherCore
                     if account.provider == .codex { Button("Sign in with device code…") { model.startLogin(account, deviceAuth: true) } }
                     Divider()
                     Button("Sessions…") { showSessions = true }
+                    if account.provider == .claude {
+                        Button {
+                            model.setStatusLineBeacon(account, enabled: !model.statusLineBeaconInstalled(account))
+                        } label: {
+                            if model.statusLineBeaconInstalled(account) { Label("Live usage from status line", systemImage: "checkmark") } else { Text("Live usage from status line") }
+                        }
+                    }
                     Button("Rename…") { newName = account.name; newShortLabel = account.shortLabel ?? ""; showRename = true }
                     Button(showHistory ? "Hide history" : "Show history") { showHistory.toggle() }
                 }

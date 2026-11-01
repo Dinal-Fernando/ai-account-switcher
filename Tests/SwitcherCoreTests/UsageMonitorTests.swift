@@ -119,6 +119,24 @@ final class UsageMonitorTests: XCTestCase {
         XCTAssertLessThanOrEqual(wait, 360, "short, fixed re-check interval for lapsed tokens")
     }
 
+    func testReloadBeaconsPicksUpStatusLineReadingWithoutNetwork() async throws {
+        let env = TempEnvironment()
+        let ctx = makeContext(env)
+        let monitor = UsageMonitor(adapters: [.claude: ClaudeProvider(context: ctx)], cache: UsageCache(paths: env.paths))
+        let a = Account(id: "a", provider: .claude, name: "A", kind: .managed)
+        await monitor.load(accounts: [a])
+        let before = await monitor.state(for: a.key)
+        XCTAssertNil(before.effectiveSnapshot)
+        let json = "{\"rate_limits\":{\"five_hour\":{\"used_percentage\":77,\"resets_at\":1900000000},\"seven_day\":{\"used_percentage\":12}}}"
+        try AtomicFile.write(json, to: env.paths.statusLineBeaconFile(profileId: "a"))
+        await monitor.reloadBeacons([a])
+        let after = await monitor.state(for: a.key)
+        XCTAssertEqual(after.effectiveSnapshot?.fiveHour?.usedPercent, 77)
+        XCTAssertEqual(after.effectiveSnapshot?.weekly?.usedPercent, 12)
+        XCTAssertEqual(after.effectiveSnapshot?.source, "statusline-beacon")
+        XCTAssertEqual(after.effectiveSnapshot?.fiveHour?.resetsAt, Date(timeIntervalSince1970: 1_900_000_000))
+    }
+
     func testHistoryAppendsWithSpacing() {
         let env = TempEnvironment()
         let cache = UsageCache(paths: env.paths)

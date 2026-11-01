@@ -20,12 +20,16 @@ public enum ProfileError: Error, LocalizedError, Equatable {
     case invalidId(String)
     case alreadyExists(String)
     case cannotModifyDefault
+    case unsupportedProvider
+    case settingsUnreadable(String)
 
     public var errorDescription: String? {
         switch self {
         case .invalidId(let id): return "Invalid profile id '\(id)'"
         case .alreadyExists(let id): return "Profile '\(id)' already exists"
         case .cannotModifyDefault: return "The default profile is the CLI's own directory and cannot be created or deleted here"
+        case .unsupportedProvider: return "This feature is only available for Claude Code accounts"
+        case .settingsUnreadable(let path): return "\(path) is not valid JSON, so it was left untouched. Fix the file (or remove it) and try again."
         }
     }
 }
@@ -149,6 +153,85 @@ public final class CLIProfileManager: @unchecked Sendable {
         out += lines.joined(separator: "\n")
         if !out.hasSuffix("\n") { out += "\n" }
         return out
+    }
+
+    // MARK: Claude status-line beacon (live usage source)
+
+    /// Command written into a profile's settings.json. Tilde form for the default home so the file stays portable.
+    public func beaconCommand() -> String {
+        paths.isDefaultRoot ? "~/.aiswitch/bin/aiswitch-statusline" : paths.statusLineBeacon.path
+    }
+
+    public static func isBeaconCommand(_ command: String) -> Bool {
+        command.trimmingCharacters(in: .whitespaces).hasSuffix("aiswitch-statusline")
+    }
+
+    /// Returns the settings with the beacon installed, plus the previous non-beacon status line command (if any).
+    public static func settingsAddingBeacon(_ settings: [String: Any], beacon: String) -> (settings: [String: Any], previous: String?) {
+        var out = settings
+        var previous: String?
+        if let existing = settings["statusLine"] as? [String: Any], let cmd = existing["command"] as? String, !isBeaconCommand(cmd), !cmd.isEmpty {
+            previous = cmd
+        }
+        out["statusLine"] = ["type": "command", "command": beacon]
+        return (out, previous)
+    }
+
+    /// Restores the previous command, or removes the key when the beacon was the only status line.
+    public static func settingsRemovingBeacon(_ settings: [String: Any], previous: String?) -> [String: Any] {
+        var out = settings
+        if let previous, !previous.isEmpty {
+            out["statusLine"] = ["type": "command", "command": previous]
+        } else if let existing = settings["statusLine"] as? [String: Any], let cmd = existing["command"] as? String, isBeaconCommand(cmd) {
+            out.removeValue(forKey: "statusLine")
+        }
+        return out
+    }
+
+    func readSettings(_ url: URL) throws -> [String: Any] {
+        guard fm.fileExists(atPath: url.path) else { return [:] }
+        guard let data = try? Data(contentsOf: url),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw ProfileError.settingsUnreadable(url.path)
+        }
+        return obj
+    }
+
+    func writeSettings(_ settings: [String: Any], to url: URL) throws {
+        let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
+        let perms = (try? fm.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int) ?? 0o600
+        try AtomicFile.write(data, to: url, permissions: perms)
+    }
+
+    public func statusLineBeaconInstalled(for account: Account) -> Bool {
+        guard account.provider == .claude, let settings = try? readSettings(claudeSettingsFile(for: account)),
+              let sl = settings["statusLine"] as? [String: Any], let cmd = sl["command"] as? String else { return false }
+        return Self.isBeaconCommand(cmd)
+    }
+
+    /// Points the profile's status line at the beacon, remembering any previous command in the chain file so the
+    /// beacon keeps forwarding to it. Never touches a settings.json it cannot parse.
+    public func installStatusLineBeacon(for account: Account) throws {
+        guard account.provider == .claude else { throw ProfileError.unsupportedProvider }
+        let file = claudeSettingsFile(for: account)
+        let current = try readSettings(file)
+        let (updated, previous) = Self.settingsAddingBeacon(current, beacon: beaconCommand())
+        if let previous {
+            try AtomicFile.write(previous + "\n", to: paths.statusLineChainFile(profileId: account.id), permissions: 0o600)
+        }
+        try writeSettings(updated, to: file)
+        SwitcherLog.shared.log("status-line beacon installed for claude:\(account.id)", category: "beacon")
+    }
+
+    public func removeStatusLineBeacon(for account: Account) throws {
+        guard account.provider == .claude else { throw ProfileError.unsupportedProvider }
+        let file = claudeSettingsFile(for: account)
+        let current = try readSettings(file)
+        let chain = paths.statusLineChainFile(profileId: account.id)
+        let previous = AtomicFile.readLine(chain)
+        try writeSettings(Self.settingsRemovingBeacon(current, previous: previous), to: file)
+        try? fm.removeItem(at: chain)
+        SwitcherLog.shared.log("status-line beacon removed for claude:\(account.id)", category: "beacon")
     }
 
     // MARK: vendor files
