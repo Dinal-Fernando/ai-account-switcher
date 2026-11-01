@@ -8,9 +8,12 @@ public enum RCFileEditor {
 
     public static func blockLines(pathExpr: String) -> [String] {
         [blockBegin,
-         "# Added by AI Account Switcher: puts the account-aware claude/codex wrappers first in PATH.",
+         "# Added by AI Account Switcher: routes claude/codex through the account-aware wrappers.",
          "# Remove this block (or run Scripts/uninstall-shell-integration.sh) to restore the plain CLIs.",
          "case \":$PATH:\" in *\":\(pathExpr):\"*) ;; *) export PATH=\"\(pathExpr):$PATH\" ;; esac",
+         "# Functions win over PATH, so lines added later by other installers (nvm, Claude Code) cannot bypass the wrappers.",
+         "claude() { if [ -x \"\(pathExpr)/claude\" ]; then \"\(pathExpr)/claude\" \"$@\"; else command claude \"$@\"; fi; }",
+         "codex() { if [ -x \"\(pathExpr)/codex\" ]; then \"\(pathExpr)/codex\" \"$@\"; else command codex \"$@\"; fi; }",
          blockEnd]
     }
 

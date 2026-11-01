@@ -48,13 +48,14 @@ import SwitcherCore
             let wrappersPresent = Provider.allCases.allSatisfy { model.shellStatus.wrapperInstalled[$0] == true }
             let details = Provider.allCases.filter { !model.shellIntegrationActive($0) }.map { model.shellStatus.detail($0, paths: model.runtime.paths) }.joined(separator: " ")
             Banner(style: .warning, icon: "terminal",
-                   title: wrappersPresent ? "Shell integration may not be in effect" : "Shell integration is not installed",
+                   title: wrappersPresent ? "Shell integration is not in effect" : "Shell integration is not installed",
                    message: wrappersPresent
-                       ? "\(details) If a new terminal does run the wrapper (aiswitch which claude shows applied=yes), this is a probe glitch: click Re-check."
+                       ? details
                        : "Terminal still runs the plain claude/codex, so Set Active has no effect on new commands yet. Install it (reversible, backs up ~/.zshrc).",
-                   actionTitle: wrappersPresent ? "Re-check" : "Install shell integration") {
-                Task { if wrappersPresent { await model.probeShell() } else { await model.installShellIntegration(addPathBlock: true) } }
-            }
+                   actionTitle: wrappersPresent ? "Repair" : "Install shell integration",
+                   action: { Task { await model.installShellIntegration(addPathBlock: true) } },
+                   secondaryTitle: wrappersPresent ? "Re-check" : nil,
+                   secondaryAction: { Task { await model.probeShell() } })
         }
         if let msg = model.errorMessage {
             Banner(style: .error, icon: "xmark.octagon", title: "Something went wrong", message: msg, actionTitle: "Dismiss") { model.errorMessage = nil }
@@ -120,6 +121,8 @@ struct Banner: View {
     let message: String
     let actionTitle: String?
     let action: (() -> Void)?
+    var secondaryTitle: String? = nil
+    var secondaryAction: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -129,7 +132,8 @@ struct Banner: View {
                 Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            if let actionTitle, let action { Button(actionTitle, action: action).controlSize(.small) }
+            if let secondaryTitle, let secondaryAction { Button(secondaryTitle, action: secondaryAction).controlSize(.small) }
+            if let actionTitle, let action { Button(actionTitle, action: action).controlSize(.small).buttonStyle(.borderedProminent) }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.08)))

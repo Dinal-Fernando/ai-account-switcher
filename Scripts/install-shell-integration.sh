@@ -164,9 +164,12 @@ if [ "$no_rc" = 0 ]; then
         awk -v b="$block_begin" -v e="$block_end" 'BEGIN{skip=0; held=0} { if (skip) { if ($0==e) skip=0; next } if ($0==b) { skip=1; held=0; next } if (held) { print ""; held=0 } if ($0=="") { held=1; next } print } END{ if (held) print "" }' "$rc"
       fi
       printf '\n%s\n' "$block_begin"
-      printf '# Added by AI Account Switcher: puts the account-aware claude/codex wrappers first in PATH.\n'
+      printf '# Added by AI Account Switcher: routes claude/codex through the account-aware wrappers.\n'
       printf '# Remove this block (or run Scripts/uninstall-shell-integration.sh) to restore the plain CLIs.\n'
       printf 'case ":$PATH:" in *":%s:"*) ;; *) export PATH="%s:$PATH" ;; esac\n' "$path_expr" "$path_expr"
+      printf '# Functions win over PATH, so lines added later by other installers (nvm, Claude Code) cannot bypass the wrappers.\n'
+      printf 'claude() { if [ -x "%s/claude" ]; then "%s/claude" "$@"; else command claude "$@"; fi; }\n' "$path_expr" "$path_expr"
+      printf 'codex() { if [ -x "%s/codex" ]; then "%s/codex" "$@"; else command codex "$@"; fi; }\n' "$path_expr" "$path_expr"
       printf '%s\n' "$block_end"
     } > "$tmp"
     if [ -f "$rc" ]; then chmod --reference="$rc" "$tmp" 2>/dev/null || chmod 644 "$tmp"; else chmod 644 "$tmp"; fi

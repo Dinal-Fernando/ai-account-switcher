@@ -34,10 +34,11 @@ app and machine restarts. Sessions that are already running are never touched.
    has the profile variable set. The app never asks for passwords, never copies tokens between accounts,
    and never writes vendor Keychain items.
 3. **Set Active** atomically writes the profile id to `~/.aiswitch/state/active-claude` (or `-codex`).
-4. `~/.aiswitch/bin/claude` and `~/.aiswitch/bin/codex` are small POSIX-sh wrappers placed first in your PATH
-   (one marked block in `~/.zshrc`, backed up, reversible). On *every* launch they read the state file, export
-   exactly one variable, and `exec` the real binary with your arguments and working directory. No recursion,
-   no daemon, no edits to your rc file per switch.
+4. `~/.aiswitch/bin/claude` and `~/.aiswitch/bin/codex` are small POSIX-sh wrappers. One marked block in
+   `~/.zshrc` (backed up, reversible) puts them first in PATH and defines `claude()`/`codex()` shell functions
+   that call them, so later PATH lines from other installers cannot bypass them. On *every* launch they read
+   the state file, export exactly one variable, and `exec` the real binary with your arguments and working
+   directory. No recursion, no daemon, no edits to your rc file per switch.
 5. The card only shows **ACTIVE** after the vendor CLI (`claude auth status`, `codex login status`) confirmed
    inside that profile that it is signed in, and after a fresh login shell confirmed it resolves `claude` to
    the wrapper.

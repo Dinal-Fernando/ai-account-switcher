@@ -11,6 +11,11 @@ public struct ShellIntegrationStatus: Equatable, Sendable {
     /// Filled by `verify(...)`: the login shell's PATH entries, in order.
     public var loginShellPATH: [String] = []
     public var loginShellName: String?
+    /// Filled by `verify(...)`: did typing the command in a login shell actually run the wrapper?
+    /// (`true`/`false` when the probe ran; absent when it could not run.)
+    public var loginShellWrapperRan: [Provider: Bool] = [:]
+    /// The wrapper's own resolution as seen from the login shell (profile, config_dir, applied, …).
+    public var loginShellWrapperResolution: [Provider: [String: String]] = [:]
     public var loginShellProbed = false
 
     public init() {}
@@ -34,10 +39,11 @@ public struct ShellIntegrationStatus: Equatable, Sendable {
         return (bin, real)
     }
 
-    /// True when the wrapper exists *and* a login shell actually picks it up: either the shell resolves the
-    /// command to the wrapper, or our bin dir precedes the real executable's directory in the shell's PATH.
+    /// True when the wrapper exists *and* a login shell actually picks it up. The functional probe (did typing the
+    /// command run the wrapper?) is decisive; the path lookup and PATH order are fallbacks when it could not run.
     public func isActive(_ provider: Provider, paths: SwitcherPaths) -> Bool {
         guard wrapperInstalled[provider] == true, loginShellProbed else { return false }
+        if let ran = loginShellWrapperRan[provider] { return ran }
         let wrapper = Self.canonical(paths.wrapper(provider).path, home: paths.home)
         if let r = loginShellResolution[provider], Self.canonical(r, home: paths.home) == wrapper { return true }
         let order = pathOrder(provider, paths: paths)
@@ -54,17 +60,23 @@ public struct ShellIntegrationStatus: Equatable, Sendable {
         let shell = loginShellName ?? "shell"
         let resolved = loginShellResolution[provider] ?? "nothing"
         if isActive(provider, paths: paths) {
+            if let res = loginShellWrapperResolution[provider], let profile = res["profile"] {
+                return "Typing \(provider.executableName) in a new login \(shell) runs the wrapper (profile \(profile)); switching is in effect."
+            }
             return "Your login \(shell) runs \(provider.executableName) from \(resolved); switching is in effect for new terminals."
         }
-        var s = "Your login \(shell) runs \(provider.executableName) from \(resolved), not from \(paths.wrapper(provider).path)."
+        var s = loginShellWrapperRan[provider] == false
+            ? "Typing \(provider.executableName) in a new login \(shell) runs \(resolved), not the wrapper at \(paths.wrapper(provider).path)."
+            : "Your login \(shell) runs \(provider.executableName) from \(resolved), not from \(paths.wrapper(provider).path)."
         let order = pathOrder(provider, paths: paths)
         if loginShellPATH.isEmpty {
             s += " The shell's PATH could not be read (slow or interactive rc file?)."
         } else if order.bin == nil {
             s += " \(paths.bin.path) is not on that PATH: the block in your rc file is missing or is overwritten by a later PATH assignment."
         } else if let real = order.real, let bin = order.bin, real < bin {
-            s += " \(paths.bin.path) is on the PATH but after the real executable's directory; move the aiswitch block to the end of your rc file."
+            s += " \(paths.bin.path) is on the PATH but after the real executable's directory (another installer, such as Claude Code's or nvm, added its PATH line after the aiswitch block)."
         }
+        s += " Click Repair: it re-adds the aiswitch block at the end of your rc file, including shell functions that win over PATH order; then open a new terminal."
         return s
     }
 }
@@ -279,6 +291,10 @@ public final class ShellIntegrationManager: @unchecked Sendable {
         let login = shell ?? LoginShell(environment: environment, runner: runner)
         for provider in Provider.allCases {
             if let r = login.resolve(provider.executableName) { s.loginShellResolution[provider] = r }
+            if s.wrapperInstalled[provider] == true, let probe = login.wrapperProbe(provider.executableName) {
+                s.loginShellWrapperRan[provider] = probe["wrapper_version"] != nil
+                if !probe.isEmpty { s.loginShellWrapperResolution[provider] = probe }
+            }
         }
         s.loginShellPATH = login.pathEntries()
         s.loginShellName = login.shellName

@@ -17,6 +17,8 @@ final class ShellIntegrationTests: XCTestCase {
         XCTAssertTrue(RCFileEditor.containsBlock(added))
         XCTAssertTrue(added.hasPrefix(original + "\n# >>> aiswitch >>>\n"))
         XCTAssertTrue(added.contains("export PATH=\"$HOME/.aiswitch/bin:$PATH\""))
+        XCTAssertTrue(added.contains("claude() { if [ -x \"$HOME/.aiswitch/bin/claude\" ]; then \"$HOME/.aiswitch/bin/claude\" \"$@\"; else command claude \"$@\"; fi; }"))
+        XCTAssertTrue(added.contains("codex() {"))
         XCTAssertEqual(RCFileEditor.addingBlock(added, pathExpr: "$HOME/.aiswitch/bin"), added, "idempotent")
         XCTAssertEqual(RCFileEditor.removingBlock(added), original, "byte-identical after removal")
         XCTAssertEqual(RCFileEditor.removingBlock(""), "")
@@ -169,9 +171,35 @@ final class ShellIntegrationTests: XCTestCase {
         // tilde entries are expanded
         s.loginShellPATH = ["~/" + env.paths.bin.path.dropFirst(env.home.path.count + 1), "/opt/homebrew/bin"]
         XCTAssertTrue(s.isActive(.claude, paths: env.paths))
+        // the functional probe is decisive in both directions
+        s.loginShellPATH = ["/opt/homebrew/bin", "/usr/bin"]
+        s.loginShellWrapperRan[.claude] = true
+        s.loginShellWrapperResolution[.claude] = ["wrapper_version": "1", "profile": "work-1"]
+        XCTAssertTrue(s.isActive(.claude, paths: env.paths), "shell functions can make the wrapper win even with a bad PATH order")
+        XCTAssertTrue(s.detail(.claude, paths: env.paths).contains("profile work-1"))
+        s.loginShellWrapperRan[.claude] = false
+        s.loginShellPATH = [env.paths.bin.path, "/opt/homebrew/bin"]
+        XCTAssertFalse(s.isActive(.claude, paths: env.paths), "an alias or function running the real binary beats PATH order")
+        XCTAssertTrue(s.detail(.claude, paths: env.paths).contains("Repair"))
+        s.loginShellWrapperRan = [:]
         // wrapper not installed → never active
         s.wrapperInstalled[.claude] = false
         XCTAssertFalse(s.isActive(.claude, paths: env.paths))
+    }
+
+    func testWrapperProbeParsesWrapperOutputAndDetectsRealBinary() {
+        let env = TempEnvironment()
+        let runner = FakeProcessRunner()
+        let zsh = env.makeFakeExecutable("zsh")
+        runner.script("zsh -l -i -c AISWITCH_PRINT_RESOLUTION=1 claude --version",
+                      ProcessResult(exitCode: 0, stdout: "motd\nwrapper_version=1\ntool=claude\nprofile=work-1\napplied=yes\n", stderr: ""))
+        runner.script("zsh -l -i -c AISWITCH_PRINT_RESOLUTION=1 codex --version", ProcessResult(exitCode: 0, stdout: "codex-cli 0.166.0\n", stderr: ""))
+        let login = LoginShell(shellPath: zsh, environment: [:], runner: runner)
+        let claude = login.wrapperProbe("claude")
+        XCTAssertEqual(claude?["profile"], "work-1")
+        XCTAssertEqual(claude?["wrapper_version"], "1")
+        XCTAssertEqual(login.wrapperProbe("codex"), [:], "real binary answered: wrapper not in effect")
+        XCTAssertNil(login.wrapperProbe("nothing"), "scripted default is a failure")
     }
 
     func testLoginShellEnvParsing() {

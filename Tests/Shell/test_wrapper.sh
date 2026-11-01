@@ -88,6 +88,31 @@ assert_eq "installer is idempotent (one block after 2 runs)" "1" "$(grep -c '^# 
 pathline=$(bash -c "source '$HOME/.zshrc'; source '$HOME/.zshrc'; printf '%s' \"\$PATH\"")
 case "$pathline" in "$AISWITCH_HOME/bin:"*) ok "rc block prepends bin dir" ;; *) bad "rc block prepends bin dir" "$pathline" ;; esac
 assert_eq "rc block does not duplicate PATH entry" "1" "$(printf '%s' "$pathline" | tr ':' '\n' | grep -c -x -F "$AISWITCH_HOME/bin")"
+# the block also defines claude/codex shell functions that win over any later PATH edit
+mkdir -p "$T/laterbin"; cp "$T/fakebin/claude" "$T/laterbin/claude"
+printf 'export PATH="%s:$PATH"\n' "$T/laterbin" >> "$HOME/.zshrc"          # simulates Claude Code's installer / nvm appending after our block
+fn=$(bash -c "source '$HOME/.zshrc'; type -t claude")
+assert_eq "rc block defines a claude function" "function" "$fn"
+mkdir -p "$AISWITCH_HOME/profiles/claude/fn-1"; set_active claude fn-1
+out=$(bash -c "source '$HOME/.zshrc'; claude ping" 2>/dev/null)
+assert_eq "function routes through the wrapper despite a later PATH prepend" "$AISWITCH_HOME/profiles/claude/fn-1" "$(field "$out" CLAUDE_CONFIG_DIR)"
+assert_eq "function runs the real binary found by the wrapper" "$T/fakebin/claude" "$(field "$out" REAL)"
+assert_contains "function passes arguments" "$out" "ARG=ping"
+mv "$AISWITCH_HOME/bin/claude" "$AISWITCH_HOME/bin/claude.off"
+out=$(bash -c "source '$HOME/.zshrc'; claude ping" 2>/dev/null)
+assert_eq "function falls back to the plain command when the wrapper is missing" "" "$(field "$out" CLAUDE_CONFIG_DIR)"
+assert_contains "fallback still runs a real claude" "$out" "REAL="
+mv "$AISWITCH_HOME/bin/claude.off" "$AISWITCH_HOME/bin/claude"
+# functional probe: the wrapper answers the dry-run flag before exec, the real binary does not
+probe=$(bash -c "source '$HOME/.zshrc'; AISWITCH_PRINT_RESOLUTION=1 claude --version")
+assert_contains "functional probe sees the wrapper" "$probe" "wrapper_version=1"
+assert_eq "functional probe reports the profile" "fn-1" "$(field "$probe" profile)"
+set_active claude default
+# restore the rc to the installer's output for the remaining tests
+"$INSTALL" --rc "$HOME/.zshrc" --wrapper "$WRAPPER" --statusline "$STATUSLINE" --no-verify --quiet >/dev/null 2>&1
+printf '# my zshrc\nexport FOO=bar\n' > "$T/zshrc.before.tmp"; awk 'BEGIN{skip=0} /^# >>> aiswitch >>>$/{skip=1; next} /^# <<< aiswitch <<<$/{skip=0; next} !skip{print}' "$HOME/.zshrc" | grep -v "$T/laterbin" > "$T/zshrc.stripped"
+printf '%s\n' "$(cat "$T/zshrc.stripped")" > "$HOME/.zshrc"
+"$INSTALL" --rc "$HOME/.zshrc" --wrapper "$WRAPPER" --statusline "$STATUSLINE" --no-verify --quiet >/dev/null 2>&1
 
 export PATH="$AISWITCH_HOME/bin:$BASEPATH"
 W="$AISWITCH_HOME/bin/claude"

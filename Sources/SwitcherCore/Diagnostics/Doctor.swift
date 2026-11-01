@@ -101,8 +101,9 @@ public struct Doctor: Sendable {
             if probeShell {
                 let active = shellStatus.isActive(provider, paths: paths)
                 let resolved = shellStatus.loginShellResolution[provider] ?? "(nothing)"
+                let ran = shellStatus.loginShellWrapperRan[provider].map { $0 ? "runs the wrapper" : "runs the real binary, NOT the wrapper" } ?? "(functional probe unavailable)"
                 items.append(DoctorItem(id: "\(p)-path", level: active ? .ok : (shellStatus.wrapperInstalled[provider] == true ? .failure : .info),
-                                        title: "Login shell resolves \(provider.executableName) to \(resolved)",
+                                        title: "Typing \(provider.executableName) in a new login shell \(ran); path lookup gives \(resolved)",
                                         detail: shellStatus.detail(provider, paths: paths) + (shellStatus.loginShellPATH.isEmpty ? "" : " PATH: \(shellStatus.loginShellPATH.joined(separator: ":"))")))
                 let overrides = EnvOverrideDetector.findings(provider: provider, environment: loginEnv)
                 for f in overrides { items.append(DoctorItem(id: f.id, level: .warning, title: f.message, detail: "Unset it (or use AISWITCH_NO_ENV_WARN=1 to silence the wrapper) if you want the selected subscription login.")) }

@@ -37,6 +37,23 @@ public struct LoginShell: Sendable {
         return Self.lastAbsolutePath(in: result.stdout)
     }
 
+    /// The definitive check: run `<command> --version` in a login shell with the wrapper's dry-run flag set.
+    /// The wrapper answers with `key=value` lines (and exits before exec); the real CLI prints its version.
+    /// Returns the parsed resolution when the wrapper answered, `[:]` when something else ran, nil on failure.
+    public func wrapperProbe(_ command: String, timeout: TimeInterval = 20) -> [String: String]? {
+        guard let result = run("AISWITCH_PRINT_RESOLUTION=1 \(command) --version", timeout: timeout), !result.timedOut else { return nil }
+        var out: [String: String] = [:]
+        for line in result.stdout.split(separator: "\n") {
+            guard let eq = line.firstIndex(of: "=") else { continue }
+            let key = String(line[..<eq])
+            if ["wrapper_version", "tool", "wrapper", "real", "real_resolved", "profile", "profile_source", "env_var", "config_dir", "applied", "overrides"].contains(key) {
+                out[key] = String(line[line.index(after: eq)...])
+            }
+        }
+        if out["wrapper_version"] != nil { return out }
+        return result.exitCode == 0 || !result.stdout.isEmpty ? [:] : nil
+    }
+
     static func lastAbsolutePath(in text: String) -> String? {
         text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.last { $0.hasPrefix("/") }
     }
